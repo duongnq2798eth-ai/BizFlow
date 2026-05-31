@@ -1,0 +1,376 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary: #0a0a0a;
+  --on-primary: #ffffff;
+  --brand-green: #00d4a4;
+  --brand-green-deep: #00b48a;
+  --brand-green-soft: #e6fbf6;
+  --brand-tag: #3772cf;
+  --brand-warn: #c37d0d;
+  --brand-annotate: #1ba673;
+  --brand-error: #d45656;
+  --brand-cursor: #888888;
+  
+  --hero-sky-from: #87a8c8;
+  --hero-sky-to: #f5e9d8;
+  --hero-dark-from: #1a3d4a;
+  --hero-dark-to: #2d5a4f;
+  
+  --canvas: #ffffff;
+  --canvas-dark: #0a0a0a;
+  --surface: #f7f7f7;
+  --surface-soft: #fafafa;
+  --surface-code: #141416;
+  --hairline: #e5e5e5;
+  --hairline-soft: #ededed;
+  --hairline-dark: #1f1f1f;
+  
+  --ink: #0a0a0a;
+  --charcoal: #1c1c1e;
+  --slate: #3a3a3c;
+  --steel: #5a5a5c;
+  --stone: #888888;
+  --muted: #a8a8aa;
+  
+  --on-dark: #ffffff;
+  --on-dark-muted: #b3b3b3;
+
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-inter);
+  color: var(--charcoal);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+code, pre {
+  font-family: var(--font-mono);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--hairline);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--stone);
+}
+
+/* Text Input Mask */
+input[type="password"] {
+  font-family: var(--font-mono);
+  letter-spacing: 0.125em;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive Table */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background-color: var(--canvas);
+}
+
+/* Checkout Widget specific styles */
+.checkout-widget-container {
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #0a0a0a;
+  font-family: 'Inter', -apple-system, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e5e5e5;
+}
+
+.checkout-widget-container .header {
+  background: #0a0a0a;
+  color: #ffffff;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.checkout-widget-container .header-logo {
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkout-widget-container .logo-green {
+  color: #00d4a4;
+}
+
+.checkout-widget-container .network-badge {
+  background: #1c1c1e;
+  border: 1px solid #00d4a4;
+  color: #00d4a4;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.checkout-widget-container .content {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.checkout-widget-container .summary {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.checkout-widget-container .summary-label {
+  font-size: 13px;
+  color: #5a5a5c;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.checkout-widget-container .merchant-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.checkout-widget-container .amount-display {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0a0a0a;
+  margin: 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.checkout-widget-container .amount-unit {
+  font-size: 16px;
+  color: #5a5a5c;
+  font-weight: 500;
+}
+
+.checkout-widget-container .btn-google {
+  background: #ffffff;
+  color: #0a0a0a;
+  border: 1px solid #e5e5e5;
+  padding: 12px;
+  border-radius: 9999px;
+  font-weight: 500;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.checkout-widget-container .btn-google:hover {
+  background: #f7f7f7;
+  border-color: #d5d5d5;
+}
+
+.checkout-widget-container .btn-primary {
+  background: #00d4a4;
+  color: #0a0a0a;
+  border: none;
+  padding: 12px;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.checkout-widget-container .btn-primary:hover {
+  background: #00b48a;
+}
+
+.checkout-widget-container .btn-primary:disabled {
+  background: #e5e5e5;
+  color: #a8a8aa;
+  cursor: not-allowed;
+}
+
+.checkout-widget-container .input-group {
+  margin-bottom: 16px;
+}
+
+.checkout-widget-container .input-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5a5a5c;
+  margin-bottom: 6px;
+  display: block;
+  text-transform: uppercase;
+}
+
+.checkout-widget-container .text-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background: #ffffff;
+  color: #0a0a0a;
+  transition: border-color 0.2s;
+}
+
+.checkout-widget-container .text-input:focus {
+  border-color: #00d4a4;
+}
+
+.checkout-widget-container .error-message {
+  color: #d45656;
+  font-size: 12px;
+  margin-top: 8px;
+  background: #fdf3f3;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #fbe3e3;
+}
+
+.checkout-widget-container .divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #888888;
+  font-size: 11px;
+  margin: 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.checkout-widget-container .divider::before, .checkout-widget-container .divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.checkout-widget-container .divider:not(:empty)::before {
+  margin-right: .5em;
+}
+
+.checkout-widget-container .divider:not(:empty)::after {
+  margin-left: .5em;
+}
+
+.checkout-widget-container .footer {
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: #888888;
+  border-top: 1px solid #e5e5e5;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.checkout-widget-container .success-box {
+  text-align: center;
+}
+
+.checkout-widget-container .success-icon {
+  color: #00d4a4;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+}
+
+.checkout-widget-container .tx-details {
+  background: #f7f7f7;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: left;
+  margin-top: 16px;
+  border: 1px solid #e5e5e5;
+}
+
+.checkout-widget-container .tx-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.checkout-widget-container .tx-value {
+  font-family: var(--font-mono);
+  color: #0a0a0a;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.checkout-widget-container .social-btn-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 360px) {
+  .checkout-widget-container .content {
+    padding: 16px;
+  }
+  .checkout-widget-container .amount-display {
+    font-size: 26px;
+  }
+}
+
