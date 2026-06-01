@@ -318,14 +318,176 @@ Dispatched when a retail customer successfully completes a payment through the c
    npm install
    ```
 
-3. Run the development server:
+3. Configure environment variables:
+   ```bash
+   cp .env.local.example .env.local
+   # Edit .env.local and add your MERCHANT_PRIVATE_KEY (optional, enables real on-chain execution)
+   ```
+
+4. Run the development server:
    ```bash
    npm run dev
    ```
 
-4. Build for production:
+5. Build for production:
    ```bash
    npm run build
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser. Use `Ctrl+K` to search the API portal, or trigger sandbox deposits in real-time.
+6. Open [http://localhost:3000](http://localhost:3000) in your browser. Use `Ctrl+K` to search the API portal, or trigger sandbox deposits in real-time.
+
+---
+
+## ⛓️ Trade Finance Smart Contracts
+
+BizFlow includes purpose-built Solidity smart contracts for B2B trade finance operations on Arc Testnet:
+
+### BizFlowEscrow.sol — Milestone-Based USDC Escrow
+
+A production-grade escrow contract enabling milestone-based fund release for procurement workflows:
+
+```solidity
+// Core functions
+function createDeal(address seller, uint256[] milestoneAmounts, string description) → dealId
+function completeMilestone(uint256 dealId, uint256 milestoneIndex, bytes32 proofHash)
+function raiseDispute(uint256 dealId)
+function cancelDeal(uint256 dealId)
+
+// Events: DealCreated, DealFunded, MilestoneCompleted, FundsReleased, DisputeRaised
+```
+
+**Key Design Decisions:**
+- **Milestone-based release** prevents all-or-nothing risk — funds unlock progressively as deliverables are verified
+- **Proof hashes** (IPFS/document hashes) stored on-chain for audit trails
+- **Dispute mechanism** freezes releases pending admin resolution
+- **Max 10 milestones** per deal to bound gas costs
+
+### BizFlowInvoice.sol — Three-Way Matching Invoice System
+
+An on-chain invoice management system with procurement three-way matching:
+
+```solidity
+// Core functions
+function createInvoice(buyer, amount, dueDate, description, purchaseOrderRef, earlyPayDiscount) → invoiceId
+function approveInvoice(invoiceId, goodsReceiptRef)  // Three-way match: PO + Receipt + Invoice
+function settleInvoice(invoiceId)                      // USDC settlement with early-pay discount
+function batchSettle(invoiceIds[])                      // Gas-optimized batch settlement
+
+// Events: InvoiceCreated, InvoiceApproved, InvoiceSettled, BatchSettled, ThreeWayMatchVerified
+```
+
+**Key Design Decisions:**
+- **Three-way matching** (Purchase Order → Goods Receipt → Invoice) verifies trade authenticity
+- **Early payment discounts** (up to 10% in basis points) incentivize faster settlement
+- **Batch settlement** processes up to 20 invoices in a single transaction
+
+---
+
+## 🔗 Circle SDK Deep Integration
+
+BizFlow uses Circle's developer infrastructure at every layer of the stack:
+
+### @circle-fin/app-kit — Send, Bridge, Swap
+
+```typescript
+// Real App Kit Send (POST /api/appkit/send)
+import { AppKit } from "@circle-fin/app-kit";
+import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
+
+const kit = new AppKit();
+const adapter = createViemAdapterFromPrivateKey({ privateKey });
+await kit.send({
+  from: { adapter, chain: "Arc_Testnet" },
+  to: recipientAddress,
+  amount: "100.00",
+  token: "USDC",
+});
+
+// Real App Kit Bridge via CCTP V2 (POST /api/appkit/bridge)
+await kit.bridge({
+  from: { adapter, chain: "Ethereum_Sepolia" },
+  to: { adapter, chain: "Arc_Testnet" },
+  amount: "50.00",
+});
+
+// Real App Kit Swap (POST /api/appkit/swap)
+await kit.swap({
+  adapter,
+  chain: "Arc_Testnet",
+  amount: "500.00",
+  fromToken: "USDC",
+  toToken: "EURC",
+});
+```
+
+### @circle-fin/adapter-viem-v2 — Wallet Adapter
+
+The Viem adapter bridges Circle's App Kit with the viem ecosystem, supporting both private key and browser wallet configurations:
+
+```typescript
+// Server-side: Private key adapter
+const adapter = createViemAdapterFromPrivateKey({
+  privateKey: process.env.MERCHANT_PRIVATE_KEY,
+});
+
+// Client-side: Browser wallet adapter
+const adapter = await createViemAdapterFromProvider({
+  provider: window.ethereum,
+});
+```
+
+### viem/chains — Arc Testnet Chain Definition
+
+```typescript
+// Standard import — no custom chain definition needed
+import { arcTestnet } from "viem/chains";
+// Chain ID: 5042002, Native Currency: USDC (18 decimals for gas)
+```
+
+---
+
+## 💬 Circle Product Feedback
+
+### What Worked Well
+
+1. **App Kit SDK (`@circle-fin/app-kit`)** — The unified SDK that bundles Send, Bridge, Swap, and Unified Balance into a single package is remarkably developer-friendly. The `AppKit` class provides a clean, consistent API surface that eliminated the need to manually manage CCTP burn/mint flows or swap routing. The `createViemAdapterFromPrivateKey` factory function made it trivial to reuse the same adapter across all capabilities.
+
+2. **Arc Testnet's USDC-Native Gas** — Having USDC as the native gas token (Chain ID: 5042002) is a game-changer for B2B fintech applications. Our SME users no longer need to acquire a separate volatile token just to pay transaction fees. Gas costs are denominated in the same stablecoin they already use for trade settlements, making cost accounting straightforward and predictable.
+
+3. **Sub-Second Finality** — Arc Testnet's sub-second block confirmation eliminates the "pending transaction" UX that plagues Ethereum L1. For our procurement escrow workflows, this means milestone fund releases feel instant to suppliers — a critical UX improvement for B2B adoption.
+
+4. **viem/chains Integration** — The `arcTestnet` chain being available directly in `viem/chains` (v2.50+) removed all boilerplate. No custom `defineChain()` calls needed — just import and use.
+
+### What Could Be Improved
+
+1. **App Kit Documentation Discoverability** — While the quickstart guides are excellent, discovering the full TypeScript type definitions for `SendParams`, `BridgeParams`, and `SwapParams` required digging into `node_modules`. A comprehensive TypeDoc-generated API reference would accelerate integration.
+
+2. **Testnet Faucet UX** — The Circle Faucet at `faucet.circle.com` is functional, but the rate limit (one drip per address per period) made rapid prototyping challenging when testing multiple wallet scenarios. A developer-mode with higher limits for hackathon participants would be helpful.
+
+3. **Gateway SDK for Unified Balance** — We'd love a client-side React component or hook (e.g., `<UnifiedBalanceWidget />` or `useUnifiedBalance()`) that renders a multi-chain USDC balance view out-of-the-box. Currently, building the aggregated balance UI requires manually querying each chain.
+
+4. **Smart Contract Deployment Templates** — Circle could provide pre-audited Solidity templates for common stablecoin patterns (escrow, invoice, payroll split) that are optimized for USDC's 6-decimal precision. This would reduce the barrier for developers building trade finance applications.
+
+### Why We Chose These Products
+
+For **Track 2: SME Finance & Trade Workflows**, the combination of App Kit + Arc Testnet + USDC provides the ideal stack because:
+
+- **SME merchants** need predictable costs (USDC gas eliminates volatility)
+- **Cross-border trade** requires frictionless fund movement (CCTP V2 via App Kit Bridge)
+- **Procurement workflows** demand milestone-based escrow with instant settlement (sub-second finality)
+- **API-first design** serves developer integrations (App Kit's programmatic interface)
+
+---
+
+## 📦 Dependency Matrix
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@circle-fin/app-kit` | latest | Send, Bridge, Swap, Unified Balance SDK |
+| `@circle-fin/adapter-viem-v2` | latest | Viem wallet adapter for App Kit |
+| `@circle-fin/w3s-pw-web-sdk` | latest | User-Controlled Wallets (checkout widget) |
+| `viem` | 2.50.4 | EVM client library (includes `arcTestnet` chain) |
+| `wagmi` | latest | React hooks for Ethereum |
+| `@rainbow-me/rainbowkit` | latest | Wallet connection UI |
+| `@tanstack/react-query` | latest | Async state management |
+| `next` | 14.x | App Router framework |
