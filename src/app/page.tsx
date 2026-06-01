@@ -412,7 +412,7 @@ function Home() {
             type: "success",
             message: `[x402 Stream] POST /api/nanopay - Settled 0.000050 USDC (Tx: 0x${txId}) - GAS: 0.00 USDC (Sponsored)`
           }
-        ].slice(-100));
+        ].slice(-30));
       }, 300);
       streamIntervalRef.current = interval;
     }
@@ -548,7 +548,7 @@ function Home() {
   const addLog = (type: "info" | "success" | "warning" | "error" | "input", message: string) => {
     const now = new Date();
     const timestamp = now.toTimeString().split(" ")[0];
-    setLogs((prev) => [...prev, { timestamp, type, message }]);
+    setLogs((prev) => [...prev, { timestamp, type, message }].slice(-30));
   };
 
   const handleGenerateSandboxKey = () => {
@@ -4347,6 +4347,8 @@ const job = await manager.createJobEscrow({
           display: flex;
           flex-direction: column;
           gap: 6px;
+          will-change: transform;
+          transform: translateZ(0);
         }
 
         .terminal-line {
