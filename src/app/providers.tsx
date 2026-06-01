@@ -5,30 +5,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, http } from 'wagmi';
 import { RainbowKitProvider, getDefaultConfig, darkTheme } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
+import { arcTestnet } from 'viem/chains';
 
-const arcTestnet = {
-  id: 5042002,
-  name: 'Arc Testnet',
-  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://rpc.testnet.arc.network'] },
-    public: { http: ['https://rpc.testnet.arc.network'] },
-  },
-  blockExplorers: {
-    default: { name: 'ArcScan', url: 'https://testnet.arcscan.app' },
-  },
-  testnet: true,
-} as const;
+let config: any = null;
 
-const config = getDefaultConfig({
-  appName: 'BizFlow SME Finance Stack',
-  projectId: '90d18d451737e6f8dfd445ebdf04a11f',
-  chains: [arcTestnet],
-  transports: {
-    [arcTestnet.id]: http(),
-  },
-  ssr: true,
-});
+if (typeof window !== 'undefined') {
+  config = getDefaultConfig({
+    appName: 'BizFlow SME Finance Stack',
+    projectId: '90d18d451737e6f8dfd445ebdf04a11f',
+    chains: [arcTestnet],
+    transports: {
+      [arcTestnet.id]: http('https://rpc.testnet.arc.network'),
+    },
+    ssr: true,
+  });
+}
 
 const queryClient = new QueryClient();
 
@@ -39,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
+  if (!mounted || !config) {
     return <>{children}</>;
   }
 
