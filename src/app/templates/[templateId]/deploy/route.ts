@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { createWalletClient, createPublicClient, http, defineChain } from "viem";
+import { createWalletClient, createPublicClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { arcTestnet } from "viem/chains";
 
 export const dynamic = 'force-dynamic';
 
-const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-  rpcUrls: {
-    default: { http: ["https://rpc.testnet.arc.network"] }
-  },
-  blockExplorers: {
-    default: { name: "ArcScan", url: "https://testnet.arcscan.app" }
-  }
-});
 
 const SIMPLE_TOKEN_ABI = [
   {

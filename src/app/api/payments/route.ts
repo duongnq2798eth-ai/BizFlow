@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createWalletClient, createPublicClient, http, parseUnits, defineChain, erc20Abi } from "viem";
+import { createWalletClient, createPublicClient, http, parseUnits, erc20Abi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { arcTestnet } from "viem/chains";
 
 export const dynamic = "force-dynamic";
 
-const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-  rpcUrls: {
-    default: { http: ["https://rpc.testnet.arc.network"] }
-  },
-  blockExplorers: {
-    default: { name: "ArcScan", url: "https://testnet.arcscan.app" }
-  }
-});
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 
