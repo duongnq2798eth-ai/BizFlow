@@ -61,17 +61,19 @@ export async function POST(request: NextRequest) {
 
     // 1. Fetch live StableFX pricing quote
     const estimate = await kit.estimateSwap(swapParams);
+    const outputAmountStr = estimate?.outputAmount?.toString() || "0";
+    const rateStr = (parseFloat(outputAmountStr) / parseFloat(amount)).toString();
 
     if (!execute) {
       return NextResponse.json({
         success: true,
         mode: "live",
         quote: {
-          rate: (parseFloat(estimate.outputAmount) / parseFloat(amount)).toString(),
+          rate: rateStr,
           input: amount,
-          output: estimate.outputAmount,
-          priceImpact: estimate.priceImpact,
-          fee: estimate.fee,
+          output: outputAmountStr,
+          priceImpact: estimate?.priceImpact?.toString() || "0",
+          fee: estimate?.fee?.toString() || "0",
         },
         execute: false,
         message: "Live StableFX swap quote fetched successfully.",
@@ -85,16 +87,16 @@ export async function POST(request: NextRequest) {
       success: true,
       mode: "live",
       quote: {
-        rate: (parseFloat(estimate.outputAmount) / parseFloat(amount)).toString(),
+        rate: rateStr,
         input: amount,
-        output: estimate.outputAmount,
-        priceImpact: estimate.priceImpact,
-        fee: estimate.fee,
+        output: outputAmountStr,
+        priceImpact: estimate?.priceImpact?.toString() || "0",
+        fee: estimate?.fee?.toString() || "0",
       },
       execute: true,
       transaction: {
-        txHash: txReceipt.steps?.[0]?.txHash,
-        explorerUrl: txReceipt.steps?.[0]?.explorerUrl || txReceipt.steps?.[0]?.data?.explorerUrl,
+        txHash: txReceipt?.steps?.[0]?.txHash,
+        explorerUrl: txReceipt?.steps?.[0]?.explorerUrl || txReceipt?.steps?.[0]?.data?.explorerUrl,
       },
       message: "StableFX dynamic payment swap executed successfully on Arc.",
     });
