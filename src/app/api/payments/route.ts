@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createWalletClient, createPublicClient, http, parseUnits, erc20Abi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,60 @@ export async function POST(request: NextRequest) {
 
       const totalAmount = recipients.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
-      // 1. If private key is configured, execute real transactions
+      // 1. Primary Live Option: Circle Developer-Controlled Wallets (DCW) API
+      const circleApiKey = process.env.CIRCLE_API_KEY;
+      const circleWalletId = process.env.CIRCLE_WALLET_SET_ID;
+      const circleEntitySecretCipher = process.env.CIRCLE_ENTITY_SECRET_CIPHER;
+
+      if (circleApiKey && circleWalletId && circleEntitySecretCipher) {
+        try {
+          const txHashes = [];
+          const batchId = "batch_" + Math.random().toString(36).substring(2, 10);
+          
+          for (const item of recipients) {
+            const payoutResponse = await fetch("https://api.circle.com/v1/w3s/developer/transactions/transfer", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${circleApiKey}`,
+                "X-User-Key": circleEntitySecretCipher,
+              },
+              body: JSON.stringify({
+                idempotencyKey: crypto.randomUUID(),
+                walletId: circleWalletId,
+                destinationAddress: item.address,
+                amount: [item.amount],
+                feeLevel: "MEDIUM",
+                tokenId: USDC_ADDRESS, // USDC on Arc Testnet
+              }),
+            });
+
+            if (payoutResponse.ok) {
+              const { data } = await payoutResponse.json();
+              txHashes.push(data.txHash || "pending_" + data.id);
+            }
+          }
+
+          if (txHashes.length > 0) {
+            return NextResponse.json({
+              success: true,
+              batchId,
+              status: "success",
+              recipientsCount: recipients.length,
+              totalSettled: totalAmount.toFixed(2),
+              currency: "USDC",
+              txHash: txHashes[txHashes.length - 1],
+              txHashes,
+              network: "Arc Testnet (Circle Developer-Controlled Wallets)",
+              realOnChain: true
+            });
+          }
+        } catch (dcwErr: any) {
+          console.error("Circle DCW Batch Payout Failed, falling back to private key:", dcwErr);
+        }
+      }
+
+      // 2. Secondary Live Option: Backend Private Key fallback
       if (privateKey && privateKey.startsWith("0x") && privateKey.length === 66) {
         try {
           const account = privateKeyToAccount(privateKey as `0x${string}`);
@@ -72,7 +126,7 @@ export async function POST(request: NextRequest) {
             currency: "USDC",
             txHash: txHashes[txHashes.length - 1], // Return the latest hash
             txHashes,
-            network: "Arc Testnet (Real Payouts)",
+            network: "Arc Testnet (Private Key Payouts)",
             realOnChain: true
           });
         } catch (chainErr: any) {

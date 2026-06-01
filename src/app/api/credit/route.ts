@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createWalletClient, http, parseUnits, erc20Abi } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,51 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 1. If private key is configured, execute real transactions
+      // 1. Primary Live Option: Circle Developer-Controlled Wallets (DCW) API
+      const circleApiKey = process.env.CIRCLE_API_KEY;
+      const circleWalletId = process.env.CIRCLE_WALLET_SET_ID;
+      const circleEntitySecretCipher = process.env.CIRCLE_ENTITY_SECRET_CIPHER;
+
+      if (circleApiKey && circleWalletId && circleEntitySecretCipher) {
+        try {
+          const payoutResponse = await fetch("https://api.circle.com/v1/w3s/developer/transactions/transfer", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${circleApiKey}`,
+              "X-User-Key": circleEntitySecretCipher,
+            },
+            body: JSON.stringify({
+              idempotencyKey: crypto.randomUUID(),
+              walletId: circleWalletId,
+              destinationAddress: walletAddress,
+              amount: [amount],
+              feeLevel: "MEDIUM",
+              tokenId: USDC_ADDRESS, // USDC on Arc Testnet
+            }),
+          });
+
+          if (payoutResponse.ok) {
+            const { data } = await payoutResponse.json();
+            return NextResponse.json({
+              success: true,
+              amount: parseFloat(amount).toFixed(2),
+              currency: "USDC",
+              recipient: walletAddress,
+              txHash: data.txHash || "pending_broadcast",
+              status: "settled",
+              network: "Arc Testnet (Circle Developer-Controlled Wallet)",
+              message: "Secure credit drawdown completed via Developer-Controlled MPC Wallets.",
+              realOnChain: true,
+              circleTxId: data.id,
+            });
+          }
+        } catch (dcwErr: any) {
+          console.error("Circle DCW Drawdown Failed, falling back to other methods:", dcwErr);
+        }
+      }
+
+      // 2. Secondary Live Option: Backend Private Key fallback
       if (privateKey && privateKey.startsWith("0x") && privateKey.length === 66) {
         try {
           const account = privateKeyToAccount(privateKey as `0x${string}`);
@@ -96,8 +141,8 @@ export async function POST(request: NextRequest) {
             recipient: walletAddress,
             txHash: hash,
             status: "settled",
-            network: "Arc Testnet",
-            message: "Real on-chain drawdown settlement completed.",
+            network: "Arc Testnet (Private Key Mode)",
+            message: "Real on-chain drawdown settlement completed via backend private key.",
             realOnChain: true
           });
         } catch (chainErr: any) {
