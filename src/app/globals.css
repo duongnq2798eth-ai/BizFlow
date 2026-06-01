@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
 
 :root {
   --primary: #0a0a0a;
@@ -13,30 +13,31 @@
   --brand-cursor: #888888;
   
   --hero-sky-from: #87a8c8;
-  --hero-sky-to: #f5e9d8;
+  --hero-sky-to: #f5f5f0;
   --hero-dark-from: #1a3d4a;
   --hero-dark-to: #2d5a4f;
   
-  --canvas: #ffffff;
+  --canvas: #f5f5f0; /* Gorgeous Ivory/Cream minimal background */
   --canvas-dark: #0a0a0a;
-  --surface: #f7f7f7;
+  --surface: #ffffff; /* Solid white cards */
   --surface-soft: #fafafa;
-  --surface-code: #141416;
-  --hairline: #e5e5e5;
-  --hairline-soft: #ededed;
-  --hairline-dark: #1f1f1f;
+  --surface-code: #0a0a0a;
+  --hairline: #1a1a1a; /* Structural Swiss Pitch-Black lines */
+  --hairline-soft: #cccccc;
+  --hairline-dark: #2a2a2a;
   
   --ink: #0a0a0a;
   --charcoal: #1c1c1e;
   --slate: #3a3a3c;
   --steel: #5a5a5c;
   --stone: #888888;
-  --muted: #a8a8aa;
+  --muted: #6e6e73;
   
   --on-dark: #ffffff;
   --on-dark-muted: #b3b3b3;
 
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-syne: 'Syne', sans-serif;
   --font-mono: 'Geist Mono', 'SF Mono', Menlo, Consolas, monospace;
 }
 
@@ -109,51 +110,60 @@ input[type="password"] {
   background-color: var(--canvas);
 }
 
-/* Checkout Widget specific styles */
+/* Checkout Widget specific styles - Swiss Editorial High-Contrast Aesthetic */
 .checkout-widget-container {
   width: 100%;
   height: 100%;
   min-height: 100vh;
   background: #ffffff;
   color: #0a0a0a;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: var(--font-inter);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #e5e5e5;
+  border: 2px solid #1a1a1a;
 }
 
 .checkout-widget-container .header {
-  background: #0a0a0a;
-  color: #ffffff;
-  padding: 16px;
+  background: #ffffff;
+  color: #0a0a0a;
+  padding: 18px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #1f1f1f;
+  border-bottom: 2px solid #1a1a1a;
 }
 
 .checkout-widget-container .header-logo {
-  font-size: 16px;
-  font-weight: 700;
+  font-family: var(--font-syne);
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.checkout-widget-container .logo-green {
+.checkout-widget-container .header-logo::after {
+  content: ".";
   color: #00d4a4;
 }
 
+.checkout-widget-container .logo-green {
+  color: #0a0a0a;
+}
+
 .checkout-widget-container .network-badge {
-  background: #1c1c1e;
-  border: 1px solid #00d4a4;
-  color: #00d4a4;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
   border-radius: 9999px;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .checkout-widget-container .content {
@@ -170,21 +180,26 @@ input[type="password"] {
 }
 
 .checkout-widget-container .summary-label {
-  font-size: 13px;
+  font-size: 11px;
   color: #5a5a5c;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .checkout-widget-container .merchant-name {
-  font-size: 18px;
-  font-weight: 600;
-  margin-top: 4px;
+  font-family: var(--font-syne);
+  font-size: 20px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  margin-top: 6px;
 }
 
 .checkout-widget-container .amount-display {
-  font-size: 32px;
-  font-weight: 700;
+  font-family: var(--font-syne);
+  font-size: 36px;
+  font-weight: 800;
   color: #0a0a0a;
   margin: 12px 0;
   display: flex;
@@ -194,41 +209,45 @@ input[type="password"] {
 }
 
 .checkout-widget-container .amount-unit {
-  font-size: 16px;
-  color: #5a5a5c;
-  font-weight: 500;
+  font-size: 18px;
+  color: #0a0a0a;
+  font-weight: 700;
 }
 
 .checkout-widget-container .btn-google {
   background: #ffffff;
   color: #0a0a0a;
-  border: 1px solid #e5e5e5;
+  border: 2px solid #1a1a1a;
   padding: 12px;
   border-radius: 9999px;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
 }
 
 .checkout-widget-container .btn-google:hover {
-  background: #f7f7f7;
-  border-color: #d5d5d5;
+  background: #00d4a4;
+  color: #0a0a0a;
 }
 
 .checkout-widget-container .btn-primary {
-  background: #00d4a4;
-  color: #0a0a0a;
-  border: none;
+  background: #0a0a0a;
+  color: #ffffff;
+  border: 2px solid #1a1a1a;
   padding: 12px;
   border-radius: 9999px;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -239,12 +258,14 @@ input[type="password"] {
 }
 
 .checkout-widget-container .btn-primary:hover {
-  background: #00b48a;
+  background: #00d4a4;
+  color: #0a0a0a;
 }
 
 .checkout-widget-container .btn-primary:disabled {
-  background: #e5e5e5;
-  color: #a8a8aa;
+  background: #f5f5f0;
+  color: var(--muted);
+  border-color: #cccccc;
   cursor: not-allowed;
 }
 
@@ -253,18 +274,19 @@ input[type="password"] {
 }
 
 .checkout-widget-container .input-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: #5a5a5c;
   margin-bottom: 6px;
   display: block;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .checkout-widget-container .text-input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e5e5e5;
+  border: 2px solid #1a1a1a;
   border-radius: 8px;
   font-size: 14px;
   outline: none;

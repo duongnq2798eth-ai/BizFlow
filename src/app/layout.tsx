@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Providers } from "./providers";
+import dynamic from "next/dynamic";
+
+const Providers = dynamic(
+  () => import("./providers").then((mod) => mod.Providers),
+  { ssr: false }
+);
 
 export const metadata: Metadata = {
   title: "BizFlow - B2B API Portal & SME Finance Stack",
@@ -22,3 +27,4 @@ export default function RootLayout({
     </html>
   );
 }
+

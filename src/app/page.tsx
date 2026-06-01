@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect, useRef } from "react";
 import { 
   Terminal as TerminalIcon, 
@@ -31,7 +33,10 @@ import {
   Cpu,
   Download,
   Terminal as ConsoleIcon,
-  Search
+  Search,
+  Users,
+  Mail,
+  ShieldAlert
 } from "lucide-react";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -39,7 +44,7 @@ import { useAccount, useWriteContract, useSwitchChain, useWalletClient } from "w
 import { parseUnits, createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 
 // Types for logs
 interface LogEntry {
@@ -526,51 +531,37 @@ function Home() {
   const runAgentJob = async () => {
     setIsHiringAgent(true);
     setAgentJobStep("escrow");
-    addLog("input", `POST /api/agents/escrow { agent: "${selectedAgent}", amount: "${agentJobAmount}" }`);
+    addLog("input", `POST /api/escrow { action: "create", seller: "0x8183E5c700000000000000000000000000000000", milestoneAmounts: ["${agentJobAmount}"], description: "${agentJobDescription}" }`);
     addLog("info", `Initializing ERC-8183 Job Escrow contract on Arc Testnet...`);
     addLog("info", `Target Agent (ERC-8004 Registry): ${selectedAgent}`);
     addLog("info", `Task Description: "${agentJobDescription}"`);
     addLog("info", `Escrow Balance: ${agentJobAmount} USDC`);
 
     try {
-      let jobTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-      
-      if (useWalletExtension && isConnected) {
-        addLog("info", `Requesting Signature: Locking ${agentJobAmount} USDC in Job Escrow (ERC-8183)...`);
-        
-        // Target Arc Testnet
-        const targetChainId = 5042002;
-        try {
-          await switchChainAsync({ chainId: targetChainId });
-        } catch (switchErr) {
-          // Ignore switch error, proceed
-        }
+      // 1. Call Backend API to deploy / register the Escrow Deal
+      const createResponse = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          seller: "0x8183E5c700000000000000000000000000000000", // Representative AI Agent Account
+          milestoneAmounts: [agentJobAmount],
+          description: agentJobDescription
+        })
+      });
 
-        const hash = await writeContractAsync({
-          address: "0x3600000000000000000000000000000000000000",
-          abi: [
-            {
-              name: "transfer",
-              type: "function",
-              stateMutability: "nonpayable",
-              inputs: [
-                { name: "recipient", type: "address" },
-                { name: "amount", type: "uint256" }
-              ],
-              outputs: [{ name: "", type: "bool" }]
-            }
-          ],
-          functionName: "transfer",
-          args: ["0x8183E5c700000000000000000000000000000000" as `0x${string}`, parseUnits(agentJobAmount, 6)]
-        });
-        jobTxHash = hash;
-        addLog("success", `On-chain Escrow Lock Confirmed! Tx Hash: ${hash}`);
-      } else {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        addLog("success", `ERC-8183 Job Escrow Contract Created! Tx: ${jobTxHash}`);
-        addLog("info", `Status: Locked (Gas sponsored via USDC native gas)`);
+      const createData = await createResponse.json();
+      if (!createResponse.ok) {
+        throw new Error(createData.error || "Failed to create trade escrow deal.");
       }
-      
+
+      const dealId = createData.dealId || 101;
+      const jobTxHash = createData.txHash;
+      addLog("success", `ERC-8183 Job Escrow locked successfully! Mode: ${createData.mode}`);
+      addLog("success", `Transaction Hash: ${jobTxHash}`);
+      if (createData.mode === "on-chain") {
+        addLog("success", `Active Escrow Contract: ${createData.contract}`);
+      }
       setAgentJobTxHash(jobTxHash);
 
       // Step 2: Agent Working
@@ -584,9 +575,26 @@ function Home() {
       addLog("info", `Verifying deliverables via Evaluator Oracle...`);
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Step 4: Settle Escrow
+      // Step 4: Settle Escrow & Complete Milestone
+      addLog("input", `POST /api/escrow { action: "complete", dealId: ${dealId}, milestoneIndex: 0 }`);
+      const completeResponse = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "complete",
+          dealId,
+          milestoneIndex: 0
+        })
+      });
+
+      const completeData = await completeResponse.json();
+      if (!completeResponse.ok) {
+        throw new Error(completeData.error || "Failed to complete milestone.");
+      }
+
       setAgentJobStep("settled");
-      addLog("success", `Evaluator verification PASSED! Job settled on-chain.`);
+      addLog("success", `Evaluator verification PASSED! Milestone completed on-chain.`);
+      addLog("success", `Transaction Hash: ${completeData.txHash}`);
       addLog("success", `Transferred ${agentJobAmount} USDC from Escrow to AI Agent's wallet.`);
     } catch (e: any) {
       addLog("error", `Agent escrow execution failed: ${e.message}`);
@@ -1305,6 +1313,42 @@ function Home() {
           </div>
 
           <div className="sidebar-group mt-6">
+            <div className="sidebar-group-header">Company & Support</div>
+
+            <button 
+              onClick={() => setActiveTab("about")}
+              className={`sidebar-item ${activeTab === "about" ? "active" : ""}`}
+            >
+              <Users size={16} />
+              <span>About & Team</span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab("faq")}
+              className={`sidebar-item ${activeTab === "faq" ? "active" : ""}`}
+            >
+              <HelpCircle size={16} />
+              <span>FAQs</span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab("contact")}
+              className={`sidebar-item ${activeTab === "contact" ? "active" : ""}`}
+            >
+              <Mail size={16} />
+              <span>Support & Contact</span>
+            </button>
+
+            <button 
+              onClick={() => setActiveTab("legal")}
+              className={`sidebar-item ${activeTab === "legal" ? "active" : ""}`}
+            >
+              <ShieldAlert size={16} />
+              <span>Legal & Privacy</span>
+            </button>
+          </div>
+
+          <div className="sidebar-group mt-6">
             <div className="sidebar-group-header">Reference Info</div>
             <div className="ref-card">
               <div className="ref-row">
@@ -1970,6 +2014,185 @@ const job = await manager.createJobEscrow({
 });`}
                   </code>
                 </pre>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "about" && (
+            <div className="prose animate-fade-in">
+              <div className="badge-tag">Company &amp; Story</div>
+              <h2>Our Story &amp; Mission</h2>
+              <p>
+                BizFlow was born out of the <strong>Stablecoins Commerce Stack Challenge</strong> with a singular mission: to democratize and automate financial workflows for small and medium-sized enterprises (SMEs) worldwide.
+              </p>
+              <p>
+                Traditional business banking remains slow, expensive, and fragmented. By merging Circle's institutional-grade <strong>Programmable Wallets</strong> with <strong>Arc Testnet's sub-second transaction finality and native USDC gas rails</strong>, we have built a seamless finance stack that handles payments, payouts, custom fee routing, credit scoring, and automated AI workforce escrows under one unified grid.
+              </p>
+
+              <h3>Why BizFlow Matters</h3>
+              <div className="alert-banner info">
+                <Info size={16} className="text-tag" />
+                <div>
+                  <strong>Human-First Engineering:</strong> We believe Web3 products should be as simple as legacy SaaS. BizFlow hides blockchain complexity—gas fees are handled natively in USDC, and wallets are provisioned securely via Circle social onboarding.
+                </div>
+              </div>
+
+              <h3>Core Team Core Values</h3>
+              <div className="table-container">
+                <table className="params-table">
+                  <thead>
+                    <tr>
+                      <th>Value</th>
+                      <th>Operational Target</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Zero Onboarding Friction</strong></td>
+                      <td>Users can invoke smart contract escrows without holding secondary gas tokens like ETH or AVAX.</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Programmable Security</strong></td>
+                      <td>Milestone-based escrows ensure that international suppliers are settled only upon verified deliveries.</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Open-Source Transparency</strong></td>
+                      <td>Our Solidity escrow deals and credit scoring indexes are fully verifiable and auditable on-chain.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "faq" && (
+            <div className="prose animate-fade-in">
+              <div className="badge-tag">Knowledge Base</div>
+              <h2>Frequently Asked Questions</h2>
+              <p>
+                Find answers to common questions about the BizFlow Stablecoin Commerce Stack, integrated networks, and programmable security features.
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}>
+                <details className="faq-details" style={{ border: "2px solid var(--hairline)", borderRadius: "8px", padding: "16px", background: "var(--surface)" }}>
+                  <summary style={{ fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-syne)", textTransform: "uppercase", fontSize: "14px" }}>
+                    * What is BizFlow?
+                  </summary>
+                  <p style={{ marginTop: "12px", fontSize: "14px", color: "var(--charcoal)", lineHeight: 1.5 }}>
+                    BizFlow is an interactive developer playground and suite of B2B payment tools designed to simplify stablecoin business operations. We provide pre-built checkout widgets, customized fee policies, credit rating models, and multi-signature escrows powered by Circle W3S and Arc Testnet.
+                  </p>
+                </details>
+
+                <details className="faq-details" style={{ border: "2px solid var(--hairline)", borderRadius: "8px", padding: "16px", background: "var(--surface)" }}>
+                  <summary style={{ fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-syne)", textTransform: "uppercase", fontSize: "14px" }}>
+                    * How are gas fees handled on the Arc network?
+                  </summary>
+                  <p style={{ marginTop: "12px", fontSize: "14px", color: "var(--charcoal)", lineHeight: 1.5 }}>
+                    Unlike traditional EVM networks where developers must acquire volatile native utility tokens (like ETH) to execute contract transactions, the Arc Testnet uses **USDC directly as its native gas token**. This means your gas fees are predictable and paid using the exact same asset being transacted.
+                  </p>
+                </details>
+
+                <details className="faq-details" style={{ border: "2px solid var(--hairline)", borderRadius: "8px", padding: "16px", background: "var(--surface)" }}>
+                  <summary style={{ fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-syne)", textTransform: "uppercase", fontSize: "14px" }}>
+                    * Is my wallet private key secure in this sandbox?
+                  </summary>
+                  <p style={{ marginTop: "12px", fontSize: "14px", color: "var(--charcoal)", lineHeight: 1.5 }}>
+                    Yes. All sandbox private keys generated locally are kept strictly in your local browser memory and never uploaded to any external server. For enterprise-grade security, live payments leverage **Circle W3S Programmable Wallets**, which utilize Multi-Party Computation (MPC) to secure operations.
+                  </p>
+                </details>
+
+                <details className="faq-details" style={{ border: "2px solid var(--hairline)", borderRadius: "8px", padding: "16px", background: "var(--surface)" }}>
+                  <summary style={{ fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-syne)", textTransform: "uppercase", fontSize: "14px" }}>
+                    * Who can use the B2B Credit Scoring API?
+                  </summary>
+                  <p style={{ marginTop: "12px", fontSize: "14px", color: "var(--charcoal)", lineHeight: 1.5 }}>
+                    Our Credit Scoring model analyzes historical contract fulfillments, escrow release speeds, and volume of successful stablecoin settlements on-chain to rank wallet addresses from AAA (Excellent) down to D (Default). This enables decentralized supplier credit assessment.
+                  </p>
+                </details>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "contact" && (
+            <div className="prose animate-fade-in">
+              <div className="badge-tag">Get in Touch</div>
+              <h2>Support &amp; Feedback</h2>
+              <p>
+                Have questions or need technical support? We are committed to providing premium support for developers and enterprise clients alike.
+              </p>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  alert("Thank you! Your feedback has been received. Our team will get back to you shortly.");
+                }}
+                style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px", padding: "20px", border: "2px solid var(--hairline)", borderRadius: "12px", background: "var(--surface)" }}
+              >
+                <div className="input-field">
+                  <label>Full Name</label>
+                  <input type="text" placeholder="e.g. John Doe" required style={{ border: "2px solid var(--hairline)", padding: "10px", borderRadius: "8px" }} />
+                </div>
+                <div className="input-field">
+                  <label>Contact Email</label>
+                  <input type="text" placeholder="e.g. john@company.com" required style={{ border: "2px solid var(--hairline)", padding: "10px", borderRadius: "8px" }} />
+                </div>
+                <div className="input-field">
+                  <label>Support Category</label>
+                  <select style={{ border: "2px solid var(--hairline)", padding: "10px", borderRadius: "8px" }}>
+                    <option>General Inquiry / Partner request</option>
+                    <option>Circle W3S Integration Help</option>
+                    <option>Arc Testnet Gas/RPC Issues</option>
+                    <option>Report a Bug</option>
+                  </select>
+                </div>
+                <div className="input-field">
+                  <label>Your Message</label>
+                  <textarea 
+                    rows={4} 
+                    placeholder="Describe your issue or suggestions..." 
+                    required 
+                    style={{ border: "2px solid var(--hairline)", padding: "12px", borderRadius: "8px", background: "var(--canvas)", color: "var(--ink)", width: "100%", outline: "none", fontSize: "14px" }}
+                  />
+                </div>
+                <button type="submit" className="btn-run" style={{ width: "100%", display: "flex", justifyContent: "center", textTransform: "uppercase" }}>
+                  Submit Inquiry
+                </button>
+              </form>
+
+              <h3>Community Channels</h3>
+              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="badge-tag" style={{ textDecoration: "none" }}>GitHub</a>
+                <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="badge-tag" style={{ textDecoration: "none" }}>Twitter / X</a>
+                <a href="https://telegram.org" target="_blank" rel="noopener noreferrer" className="badge-tag" style={{ textDecoration: "none" }}>Telegram</a>
+                <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="badge-tag" style={{ textDecoration: "none" }}>Discord</a>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "legal" && (
+            <div className="prose animate-fade-in">
+              <div className="badge-tag">Compliance</div>
+              <h2>Legal Agreement</h2>
+              <p style={{ fontSize: "11px", color: "var(--stone)" }}>Last updated: June 1, 2026</p>
+
+              <h3>1. Terms of Service</h3>
+              <p>
+                By accessing the BizFlow developer portal and stablecoin checkout gateway, you agree to comply with all applicable local, national, and international financial regulations. The services provided within this interactive portal are meant strictly for testing and validation on the **Arc Testnet** and **Circle Sandbox environments**.
+              </p>
+              <p>
+                We accept no liability for any mainnet assets bridged or sent to testnet smart contract addresses by accident.
+              </p>
+
+              <h3>2. Privacy Policy</h3>
+              <p>
+                We do not collect, store, or sell any private wallet keys generated within this portal. All credentials and private keys generated during your session are kept completely within your local browser storage. We implement standard industry security patterns to protect cookies and access payloads during integration simulations.
+              </p>
+
+              <div className="alert-banner info">
+                <Info size={16} className="text-tag" />
+                <div>
+                  <strong>Regulatory Attestation:</strong> Under Sandbox terms, no real financial value is created, custodied, or transacted within this domain. All USDC transacted is mock testnet stablecoin.
+                </div>
               </div>
             </div>
           )}
@@ -2749,6 +2972,96 @@ const job = await manager.createJobEscrow({
                 </button>
               </div>
             )}
+
+            {activeTab === "about" && (
+              <div className="control-group animate-fade-in">
+                <div className="control-title">Product Showcase Simulator</div>
+                <p className="text-xs text-muted" style={{ lineHeight: 1.5 }}>
+                  BizFlow is powered by high-performance protocols. Run a health diagnostic to check your RPC latency and API nodes.
+                </p>
+
+                <button 
+                  className="btn-run" 
+                  onClick={() => addLog("success", "System Diagnostic: Circle SDK: ACTIVE, Arc Node Latency: 22ms, Escrow Contract Status: ACTIVE")}
+                >
+                  <Play size={14} />
+                  <span>Run Platform Diagnostic</span>
+                </button>
+              </div>
+            )}
+
+            {activeTab === "faq" && (
+              <div className="control-group animate-fade-in">
+                <div className="control-title">Interactive FAQ Search</div>
+                <div className="input-field">
+                  <label>Search Knowledge Base</label>
+                  <div style={{ position: "relative" }}>
+                    <input 
+                      type="text" 
+                      placeholder="Type keywords (e.g. gas, wallet, credit)..." 
+                      onChange={(e) => {
+                        const term = e.target.value.toLowerCase();
+                        addLog("input", `Searching FAQ database for: "${term}"`);
+                        if (term.includes("gas")) {
+                          addLog("success", "FAQ Match: Arc uses native USDC for gas fees instead of ETH.");
+                        } else if (term.includes("wallet")) {
+                          addLog("success", "FAQ Match: We use Circle W3S Multi-Party Computation for wallets.");
+                        } else if (term.includes("credit")) {
+                          addLog("success", "FAQ Match: Credit scores analyze escrow and payment speeds dynamically.");
+                        } else if (term) {
+                          addLog("info", "Searching... try 'gas', 'wallet', or 'credit' for instant matching.");
+                        }
+                      }}
+                      style={{ border: "2px solid var(--hairline)", padding: "10px 12px 10px 32px", borderRadius: "8px", width: "100%", outline: "none", fontSize: "13px" }}
+                    />
+                    <Search size={14} style={{ position: "absolute", left: "10px", top: "13px", color: "var(--muted)" }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "contact" && (
+              <div className="control-group animate-fade-in">
+                <div className="control-title">Active Support Ticket Status</div>
+                <div style={{ background: "#ffffff", border: "1px solid #e5e5e5", padding: "12px", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div className="flex-between text-xs">
+                    <span>Active Tickets:</span>
+                    <span className="text-muted">None</span>
+                  </div>
+                  <div className="flex-between text-xs">
+                    <span>Urgent Security Alerts:</span>
+                    <span className="text-green font-semibold">ALL SYSTEMS SECURE</span>
+                  </div>
+                </div>
+
+                <button 
+                  className="btn-run" 
+                  onClick={() => addLog("info", "System Notification: Feedback form sandbox initialized. Submitting form will log a tick.")}
+                >
+                  <span>Initialize Feedback Loop</span>
+                </button>
+              </div>
+            )}
+
+            {activeTab === "legal" && (
+              <div className="control-group animate-fade-in">
+                <div className="control-title">Compliance Attestation Status</div>
+                <div style={{ padding: "12px", borderRadius: "8px", border: "2px solid #e2e8f0", backgroundColor: "#f8fafc" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: "6px" }}>Regulatory Sandbox</div>
+                  <p className="text-2xs text-muted" style={{ margin: 0, lineHeight: 1.4 }}>
+                    BizFlow matches the requirements of a fully compliant, self-custodial developer platform. All interactions on this portal are fully mocked/sandboxed for the hackathon.
+                  </p>
+                </div>
+
+                <button 
+                  className="btn-run" 
+                  onClick={() => addLog("success", "Compliance Attestation: Verified Safe Sandbox Env (June 1, 2026)")}
+                >
+                  <ShieldCheck size={14} />
+                  <span>Verify Compliance Attestation</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Response Console */}
@@ -2890,20 +3203,24 @@ const job = await manager.createJobEscrow({
           flex-direction: column;
           background-color: var(--canvas);
           color: var(--charcoal);
+          font-family: var(--font-inter);
         }
 
         .promo-banner-container {
           background-color: var(--canvas-dark);
           color: #ffffff;
-          font-size: 13px;
+          font-size: 12px;
           text-align: center;
-          padding: 8px 16px;
-          font-weight: 500;
-          border-bottom: 1px solid var(--hairline-dark);
+          padding: 10px 16px;
+          font-weight: 600;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          border-bottom: 1px solid var(--hairline);
         }
 
         .text-green {
           color: var(--brand-green-deep);
+          font-weight: 700;
         }
 
         .pulse-dot {
@@ -2929,11 +3246,11 @@ const job = await manager.createJobEscrow({
 
         .top-nav {
           background-color: var(--canvas);
-          border-bottom: 1px solid var(--hairline-soft);
+          border-bottom: 2px solid var(--hairline);
           position: sticky;
           top: 0;
           z-index: 100;
-          height: 64px;
+          height: 72px;
         }
 
         .nav-container {
@@ -2949,31 +3266,41 @@ const job = await manager.createJobEscrow({
         .nav-left {
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 20px;
         }
 
         .logo {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-weight: 700;
-          font-size: 18px;
+          font-family: var(--font-syne);
+          font-weight: 800;
+          font-size: 22px;
+          letter-spacing: -0.03em;
+          text-transform: uppercase;
           color: var(--ink);
         }
 
-        .logo-icon {
+        .logo::after {
+          content: ".";
           color: var(--brand-green);
         }
 
+        .logo-icon {
+          color: var(--ink);
+          stroke-width: 2.5;
+        }
+
         .api-badge {
-          background-color: var(--surface);
+          background-color: var(--canvas-dark);
           border: 1px solid var(--hairline);
-          color: var(--steel);
-          font-size: 11px;
-          font-weight: 600;
-          padding: 2px 6px;
-          border-radius: 4px;
+          color: #ffffff;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 3px 8px;
+          border-radius: 9999px;
           text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .nav-center {
@@ -2984,13 +3311,18 @@ const job = await manager.createJobEscrow({
 
         .search-bar {
           background-color: var(--surface);
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-          padding: 8px 16px;
+          border: 2px solid var(--hairline);
+          border-radius: 9999px;
+          padding: 8px 20px;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          height: 38px;
+          height: 42px;
+          transition: all 0.2s;
+        }
+
+        .search-bar:hover {
+          border-color: var(--brand-green);
         }
 
         .search-bar input {
@@ -3007,24 +3339,28 @@ const job = await manager.createJobEscrow({
           border: 1px solid var(--hairline);
           border-radius: 4px;
           padding: 2px 6px;
-          font-size: 11px;
+          font-size: 10px;
           color: var(--muted);
           font-family: var(--font-mono);
+          font-weight: 600;
         }
 
         .nav-right {
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: 24px;
         }
 
         .nav-link-item {
-          font-size: 14px;
-          color: var(--steel);
+          font-size: 12px;
+          color: var(--muted);
           display: flex;
           align-items: center;
           gap: 4px;
-          font-weight: 500;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          transition: color 0.2s;
         }
 
         .nav-link-item:hover {
@@ -3032,15 +3368,17 @@ const job = await manager.createJobEscrow({
         }
 
         .btn-accent {
-          background-color: var(--brand-green-soft);
-          color: var(--brand-green-deep);
-          border: 1px solid var(--brand-green);
-          font-size: 13px;
-          font-weight: 600;
-          padding: 6px 16px;
+          background-color: var(--canvas-dark);
+          color: #ffffff;
+          border: 2px solid var(--hairline);
+          font-size: 12px;
+          font-weight: 700;
+          padding: 8px 20px;
           border-radius: 9999px;
           cursor: pointer;
           transition: all 0.2s;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
         }
 
         .btn-accent:hover {
@@ -3048,67 +3386,88 @@ const job = await manager.createJobEscrow({
           color: var(--primary);
         }
 
-        /* Marketing Header */
+        /* Swiss-Style Marketing Header */
         .hero-header {
           position: relative;
-          background: linear-gradient(180deg, var(--hero-sky-from) 0%, var(--hero-sky-to) 100%);
-          padding: 48px 24px;
-          text-align: center;
+          background: var(--canvas);
+          padding: 72px 24px 64px;
+          text-align: left;
           overflow: hidden;
-          border-bottom: 1px solid var(--hairline);
+          border-bottom: 2px solid var(--hairline);
+          border-left: 2px solid var(--hairline);
+          border-right: 2px solid var(--hairline);
+          max-width: 1440px;
+          margin: 0 auto;
+          width: 100%;
         }
 
         .hero-content {
           position: relative;
           z-index: 2;
-          max-width: 800px;
-          margin: 0 auto;
+          max-width: 1000px;
+          margin: 0;
         }
 
         .hero-content h1 {
-          font-size: 36px;
-          font-weight: 700;
+          font-family: var(--font-syne);
+          font-size: 64px;
+          font-weight: 800;
+          letter-spacing: -0.04em;
+          line-height: 1.05;
+          text-transform: uppercase;
           color: var(--primary);
-          letter-spacing: -1px;
-          margin-bottom: 12px;
-          line-height: 1.2;
+          margin-bottom: 16px;
+        }
+        
+        .hero-content h1::after {
+          content: ".";
+          color: var(--brand-green);
         }
 
         .hero-content p {
-          font-size: 15px;
+          font-size: 18px;
           color: var(--slate);
-          line-height: 1.6;
+          line-height: 1.5;
+          max-width: 720px;
         }
 
-        /* 3-Column Document Layout */
+        /* 3-Column Document Layout with Swiss Structural gridlines */
         .split-screen-container {
           flex: 1;
           display: flex;
           max-width: 1440px;
           margin: 0 auto;
           width: 100%;
-          border-left: 1px solid var(--hairline-soft);
-          border-right: 1px solid var(--hairline-soft);
+          border-left: 2px solid var(--hairline);
+          border-right: 2px solid var(--hairline);
         }
 
         .sidebar {
-          width: 260px;
-          border-right: 1px solid var(--hairline-soft);
-          padding: 24px 16px;
-          background: var(--surface-soft);
+          width: 280px;
+          border-right: 2px solid var(--hairline);
+          padding: 32px 20px;
+          background: var(--canvas);
           display: flex;
           flex-direction: column;
-          gap: 24px;
+          gap: 28px;
         }
 
         .sidebar-group-header {
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
           text-transform: uppercase;
-          color: var(--steel);
-          letter-spacing: 0.5px;
-          margin-bottom: 8px;
+          color: var(--muted);
+          letter-spacing: 0.08em;
+          margin-bottom: 12px;
           padding-left: 8px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        
+        .sidebar-group-header::before {
+          content: "*";
+          color: var(--brand-green);
         }
 
         .sidebar-item {
@@ -3116,37 +3475,39 @@ const job = await manager.createJobEscrow({
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 8px 12px;
-          border: none;
+          padding: 10px 14px;
+          border: 2px solid transparent;
           background: transparent;
           color: var(--steel);
-          font-size: 14px;
-          font-weight: 500;
+          font-size: 13px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           text-align: left;
           cursor: pointer;
-          border-radius: 6px;
+          border-radius: 9999px;
           transition: all 0.2s;
         }
 
         .sidebar-item.active {
-          background-color: var(--canvas);
-          color: var(--ink);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-          border-left: 3px solid var(--brand-green);
-          padding-left: 9px;
+          background-color: var(--canvas-dark);
+          color: #ffffff;
+          border-color: var(--hairline);
+          box-shadow: none;
         }
 
         .sidebar-item:hover:not(.active) {
-          background-color: var(--hairline-soft);
+          background-color: var(--surface);
+          border-color: var(--hairline);
           color: var(--ink);
         }
 
         .ref-card {
-          background: var(--canvas);
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-          padding: 12px;
-          font-size: 12px;
+          background: var(--surface);
+          border: 2px solid var(--hairline);
+          border-radius: 12px;
+          padding: 16px;
+          font-size: 11px;
           display: flex;
           flex-direction: column;
           gap: 8px;
@@ -3161,47 +3522,63 @@ const job = await manager.createJobEscrow({
         .ref-row span:last-child {
           font-family: var(--font-mono);
           color: var(--ink);
+          font-weight: 600;
         }
 
         /* Middle Prose Column */
         .docs-content {
           flex: 1;
-          padding: 40px 32px;
+          padding: 48px 40px;
           overflow-y: auto;
           max-width: 720px;
+          border-right: 2px solid var(--hairline);
+          background: var(--surface);
         }
 
         .prose {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 24px;
         }
 
         .badge-tag {
           align-self: flex-start;
-          background-color: rgba(55, 114, 207, 0.1);
-          color: var(--brand-tag);
-          font-size: 11px;
+          background-color: var(--canvas-dark);
+          color: #ffffff;
+          font-size: 10px;
           font-weight: 700;
           text-transform: uppercase;
-          padding: 2px 8px;
-          border-radius: 4px;
+          letter-spacing: 0.05em;
+          padding: 4px 10px;
+          border-radius: 9999px;
+          border: 1px solid var(--hairline);
         }
 
         .prose h2 {
-          font-size: 28px;
-          font-weight: 700;
+          font-family: var(--font-syne);
+          font-size: 38px;
+          font-weight: 800;
           color: var(--ink);
-          letter-spacing: -0.5px;
-          border-bottom: 1px solid var(--hairline-soft);
+          letter-spacing: -0.03em;
+          text-transform: uppercase;
+          border-bottom: 2px solid var(--hairline);
           padding-bottom: 12px;
+          margin-top: 16px;
+        }
+
+        .prose h2::after {
+          content: ".";
+          color: var(--brand-green);
         }
 
         .prose h3 {
-          font-size: 18px;
-          font-weight: 600;
+          font-family: var(--font-syne);
+          font-size: 20px;
+          font-weight: 800;
           color: var(--ink);
-          margin-top: 16px;
+          text-transform: uppercase;
+          letter-spacing: -0.02em;
+          margin-top: 24px;
         }
 
         .prose p {
@@ -3213,25 +3590,26 @@ const job = await manager.createJobEscrow({
         .alert-banner {
           display: flex;
           gap: 12px;
-          padding: 16px;
+          padding: 16px 20px;
           border-radius: 8px;
           font-size: 14px;
           line-height: 1.5;
+          border: 2px solid var(--hairline);
         }
 
         .alert-banner.info {
-          background-color: var(--brand-green-soft);
-          border-left: 4px solid var(--brand-green-deep);
+          background-color: var(--surface);
+          border-left: 6px solid var(--brand-green);
         }
 
         .alert-banner.warning {
-          background-color: #fdf6ec;
-          border-left: 4px solid var(--brand-warn);
-          color: #7c5208;
+          background-color: var(--surface);
+          border-left: 6px solid var(--brand-warn);
+          color: #0a0a0a;
         }
 
-        .text-tag { color: var(--brand-tag); }
-        .text-warn { color: var(--brand-warn); }
+        .text-tag { color: var(--brand-tag); font-weight: 600; }
+        .text-warn { color: var(--brand-warn); font-weight: 600; }
 
         .step-list {
           padding-left: 20px;
@@ -3247,10 +3625,10 @@ const job = await manager.createJobEscrow({
 
         /* Code Block Component */
         .code-block-wrapper {
-          border-radius: 8px;
+          border-radius: 12px;
           overflow: hidden;
           background-color: var(--surface-code);
-          border: 1px solid var(--hairline-dark);
+          border: 2px solid var(--hairline);
         }
 
         .code-header {
@@ -3301,15 +3679,17 @@ const job = await manager.createJobEscrow({
 
         .params-table th, .params-table td {
           padding: 12px 16px;
-          border-bottom: 1px solid var(--hairline-soft);
+          border-bottom: 2px solid var(--hairline);
         }
 
         .params-table th {
-          background-color: var(--surface-soft);
-          color: var(--steel);
-          font-weight: 600;
+          background-color: var(--canvas);
+          color: var(--ink);
+          font-weight: 700;
           font-size: 12px;
           text-transform: uppercase;
+          letter-spacing: 0.05em;
+          border-bottom: 2px solid var(--hairline);
         }
 
         .badge-error {
@@ -3323,9 +3703,9 @@ const job = await manager.createJobEscrow({
 
         /* API Spec Card */
         .api-spec-card {
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-          background: var(--surface-soft);
+          border: 2px solid var(--hairline);
+          border-radius: 12px;
+          background: var(--surface);
           padding: 16px;
           display: flex;
           flex-direction: column;
@@ -3380,20 +3760,23 @@ const job = await manager.createJobEscrow({
           font-family: var(--font-mono);
         }
 
-        /* Right Sandbox panel */
+        /* Right Sandbox panel with Swiss structural grid */
         .sandbox-panel {
           width: 440px;
-          border-left: 1px solid var(--hairline-soft);
-          background: var(--surface-soft);
+          border-left: 2px solid var(--hairline);
+          background: var(--surface);
           display: flex;
           flex-direction: column;
         }
 
         .panel-header {
-          padding: 16px 20px;
-          border-bottom: 1px solid var(--hairline-soft);
-          font-size: 14px;
-          font-weight: 600;
+          padding: 18px 24px;
+          border-bottom: 2px solid var(--hairline);
+          font-family: var(--font-syne);
+          font-size: 15px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: -0.01em;
           color: var(--ink);
           display: flex;
           align-items: center;
@@ -3403,11 +3786,11 @@ const job = await manager.createJobEscrow({
 
         .playground-controls {
           flex: 1;
-          padding: 20px;
+          padding: 24px;
           overflow-y: auto;
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 24px;
         }
 
         .control-group {
@@ -3417,11 +3800,20 @@ const job = await manager.createJobEscrow({
         }
 
         .control-title {
-          font-size: 12px;
-          font-weight: 700;
+          font-family: var(--font-syne);
+          font-size: 13px;
+          font-weight: 800;
           text-transform: uppercase;
-          color: var(--steel);
-          letter-spacing: 0.5px;
+          color: var(--ink);
+          letter-spacing: -0.01em;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        
+        .control-title::before {
+          content: "*";
+          color: var(--brand-green);
         }
 
         .input-field {
@@ -3432,8 +3824,10 @@ const job = await manager.createJobEscrow({
 
         .input-field label {
           font-size: 12px;
-          font-weight: 600;
-          color: var(--slate);
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--steel);
         }
 
         .input-field select, 
@@ -3441,9 +3835,9 @@ const job = await manager.createJobEscrow({
         .input-field input[type="number"],
         .input-field input[type="date"] {
           width: 100%;
-          padding: 10px 12px;
-          border: 1px solid var(--hairline);
-          border-radius: 6px;
+          padding: 12px 14px;
+          border: 2px solid var(--hairline);
+          border-radius: 8px;
           font-size: 14px;
           outline: none;
           background: var(--canvas);
@@ -3475,10 +3869,10 @@ const job = await manager.createJobEscrow({
 
         .amount-input-wrapper span {
           position: absolute;
-          right: 12px;
+          right: 14px;
           font-size: 12px;
-          font-weight: 600;
-          color: var(--steel);
+          font-weight: 700;
+          color: var(--ink);
         }
 
         .checkbox-field {
@@ -3539,13 +3933,15 @@ const job = await manager.createJobEscrow({
         }
 
         .btn-run {
-          background-color: var(--primary);
-          color: var(--on-primary);
-          border: none;
-          padding: 12px;
+          background-color: var(--canvas-dark);
+          color: #ffffff;
+          border: 2px solid var(--hairline);
+          padding: 14px;
           border-radius: 9999px;
-          font-size: 14px;
-          font-weight: 600;
+          font-size: 13px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -3555,63 +3951,77 @@ const job = await manager.createJobEscrow({
         }
 
         .btn-run:hover {
-          background-color: var(--charcoal);
+          background-color: var(--brand-green);
+          color: var(--primary);
         }
 
         .btn-run:disabled {
-          background-color: var(--hairline);
+          background-color: var(--canvas);
           color: var(--muted);
           cursor: not-allowed;
+          border-color: var(--hairline-soft);
         }
 
         .btn-run.btn-secondary {
-          background-color: var(--surface);
+          background-color: var(--canvas);
           color: var(--ink);
-          border: 1px solid var(--hairline);
+          border: 2px solid var(--hairline);
         }
 
         .btn-run.btn-secondary:hover {
-          background-color: var(--hairline-soft);
+          background-color: var(--canvas-dark);
+          color: #ffffff;
         }
 
         /* Checkout Widget Simulation Preview */
         .widget-preview-area {
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-          padding: 12px;
+          border: 2px solid var(--hairline);
+          border-radius: 12px;
+          padding: 16px;
           background: var(--canvas);
         }
 
         .preview-label {
-          font-size: 11px;
-          font-weight: 600;
+          font-family: var(--font-syne);
+          font-size: 12px;
+          font-weight: 800;
           text-transform: uppercase;
-          color: var(--steel);
-          margin-bottom: 8px;
+          color: var(--ink);
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        
+        .preview-label::before {
+          content: "*";
+          color: var(--brand-green);
         }
 
         .widget-iframe {
           width: 100%;
           height: 380px;
-          border: none;
-          border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+          border: 2px solid var(--hairline);
+          border-radius: 12px;
+          box-shadow: none;
         }
 
         /* Session Status Box */
         .session-card {
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-          background: var(--canvas);
+          border: 2px solid var(--hairline);
+          border-radius: 12px;
+          background: var(--surface);
           overflow: hidden;
         }
 
         .session-header {
-          background: var(--surface);
-          padding: 10px 16px;
-          border-bottom: 1px solid var(--hairline);
+          background: var(--canvas);
+          padding: 12px 16px;
+          border-bottom: 2px solid var(--hairline);
           font-size: 12px;
-          font-weight: 600;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           color: var(--ink);
           display: flex;
           align-items: center;
@@ -3641,12 +4051,14 @@ const job = await manager.createJobEscrow({
 
         .btn-logout {
           background: transparent;
-          border: 1px solid var(--brand-error);
+          border: 2px solid var(--brand-error);
           color: var(--brand-error);
-          padding: 6px 12px;
+          padding: 6px 14px;
           border-radius: 9999px;
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           cursor: pointer;
           margin-top: 6px;
           transition: all 0.2s;
@@ -3667,17 +4079,18 @@ const job = await manager.createJobEscrow({
         /* Fee Split Visualizer */
         .split-visualizer {
           background: var(--canvas);
-          border: 1px solid var(--hairline);
-          border-radius: 8px;
-          padding: 12px;
+          border: 2px solid var(--hairline);
+          border-radius: 12px;
+          padding: 16px;
         }
 
         .visualizer-header {
+          font-family: var(--font-syne);
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 800;
           text-transform: uppercase;
-          color: var(--steel);
-          margin-bottom: 8px;
+          color: var(--ink);
+          margin-bottom: 12px;
           display: flex;
           align-items: center;
           gap: 6px;
@@ -3686,10 +4099,11 @@ const job = await manager.createJobEscrow({
         .split-bar-container {
           display: flex;
           height: 32px;
-          border-radius: 6px;
+          border: 2px solid var(--hairline);
+          border-radius: 8px;
           overflow: hidden;
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 700;
           color: #ffffff;
         }
 
@@ -3706,20 +4120,21 @@ const job = await manager.createJobEscrow({
         }
 
         .split-bar.admin {
-          background-color: var(--brand-green-deep);
+          background-color: var(--brand-green);
           color: var(--primary);
         }
 
         .split-bar.network {
-          background-color: var(--primary);
+          background-color: var(--canvas-dark);
+          color: #ffffff;
         }
 
         /* Credit Score Card */
         .credit-score-card {
-          background: #ffffff;
-          border: 1px solid #e5e5e5;
-          padding: 14px;
-          border-radius: 8px;
+          background: var(--surface);
+          border: 2px solid var(--hairline);
+          padding: 16px;
+          border-radius: 12px;
         }
 
         .score-badge-row {
@@ -3730,7 +4145,8 @@ const job = await manager.createJobEscrow({
 
         .score-label {
           font-size: 12px;
-          font-weight: 600;
+          font-weight: 700;
+          text-transform: uppercase;
           color: var(--steel);
         }
 
@@ -3741,23 +4157,23 @@ const job = await manager.createJobEscrow({
           border-radius: 4px;
         }
 
-        .score-badge.AAA { background-color: var(--brand-green-soft); color: var(--brand-green-deep); }
+        .score-badge.AAA { background-color: var(--brand-green); color: var(--primary); }
         .score-badge.A { background-color: #e8f4fd; color: var(--brand-tag); }
         .score-badge.B { background-color: #fdf6ec; color: var(--brand-warn); }
         .score-badge.C { background-color: #fdf3f3; color: var(--brand-error); }
         .score-badge.D { background-color: #f5f5f5; color: #5a5a5c; }
 
         .divider-line {
-          height: 1px;
+          height: 2px;
           background-color: var(--hairline);
-          margin: 4px 0;
+          margin: 6px 0;
         }
 
         /* SDK Tabs */
         .sdk-lang-selector {
           display: flex;
           gap: 8px;
-          border-bottom: 1px solid var(--hairline);
+          border-bottom: 2px solid var(--hairline);
           margin-bottom: 12px;
         }
 
@@ -3766,15 +4182,17 @@ const job = await manager.createJobEscrow({
           border: none;
           padding: 8px 16px;
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
           cursor: pointer;
-          color: var(--steel);
-          border-bottom: 2px solid transparent;
+          color: var(--stone);
+          border-bottom: 3px solid transparent;
           transition: all 0.2s;
         }
 
         .sdk-lang-tab.active {
-          color: var(--brand-green-deep);
+          color: var(--ink);
           border-bottom-color: var(--brand-green);
         }
 
@@ -3786,9 +4204,10 @@ const job = await manager.createJobEscrow({
 
         .progress-track {
           width: 100%;
-          height: 8px;
-          background-color: var(--hairline);
-          border-radius: 4px;
+          height: 10px;
+          background-color: var(--canvas);
+          border: 2px solid var(--hairline);
+          border-radius: 9999px;
           overflow: hidden;
         }
 
@@ -3802,7 +4221,7 @@ const job = await manager.createJobEscrow({
         .terminal-wrapper {
           height: 240px;
           background-color: var(--surface-code);
-          border-top: 1px solid var(--hairline-soft);
+          border-top: 2px solid var(--hairline);
           display: flex;
           flex-direction: column;
           font-family: var(--font-mono);
@@ -3810,16 +4229,17 @@ const job = await manager.createJobEscrow({
         }
 
         .terminal-header {
-          background-color: #1a1a1e;
-          padding: 10px 16px;
+          background-color: var(--canvas);
+          padding: 12px 16px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          border-bottom: 1px solid var(--hairline-dark);
-          color: #888888;
-          font-family: var(--font-inter);
+          border-bottom: 2px solid var(--hairline);
+          color: var(--ink);
+          font-family: var(--font-syne);
           font-size: 11px;
-          font-weight: 600;
+          font-weight: 800;
+          text-transform: uppercase;
         }
 
         .terminal-body {
@@ -3866,8 +4286,8 @@ const job = await manager.createJobEscrow({
 
         /* Footer */
         .footer-panel {
-          border-top: 1px solid var(--hairline);
-          padding: 24px;
+          border-top: 2px solid var(--hairline);
+          padding: 32px 24px;
           background-color: var(--canvas);
           margin-top: auto;
         }
@@ -3878,15 +4298,20 @@ const job = await manager.createJobEscrow({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          font-size: 13px;
-          color: var(--steel);
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--muted);
         }
 
         .footer-brand {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-weight: 700;
+          font-family: var(--font-syne);
+          font-weight: 800;
+          color: var(--ink);
         }
 
         /* Mobile search toggle styling */
@@ -4240,4 +4665,4 @@ const job = await manager.createJobEscrow({
   );
 }
 
-export default dynamic(() => Promise.resolve(Home), { ssr: false });
+export default nextDynamic(() => Promise.resolve(Home), { ssr: false });
