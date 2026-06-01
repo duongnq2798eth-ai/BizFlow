@@ -104,8 +104,9 @@ export default function CheckoutWidget() {
     setStep("wallet");
   };
 
-  const handleCreateWallet = async () => {
-    if (!email || !email.includes("@")) {
+  const handleCreateWallet = async (overrideEmail?: string) => {
+    const targetEmail = overrideEmail || email;
+    if (!targetEmail || !targetEmail.includes("@")) {
       setError("Please enter a valid email address");
       return;
     }
@@ -117,7 +118,7 @@ export default function CheckoutWidget() {
       const walletResponse = await fetch("/api/circle/wallets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: email })
+        body: JSON.stringify({ userId: targetEmail })
       });
       const walletData = await walletResponse.json();
 
@@ -128,7 +129,7 @@ export default function CheckoutWidget() {
       const response = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userToken, userId: email })
+        body: JSON.stringify({ userToken, userId: targetEmail })
       });
       
       const sessionResult = await response.json();
@@ -168,6 +169,20 @@ export default function CheckoutWidget() {
       setLoading(false);
     }
   };
+
+  // Automatically trigger wallet provisioning when entering intermediate loading spinner page
+  useEffect(() => {
+    if (step === "wallet") {
+      const autoProvision = async () => {
+        const defaultGoogleEmail = "google-user@bizflow.sme";
+        setEmail(defaultGoogleEmail);
+        // Add a 1.2-second wait so user experiences the premium micro-animation loading transition
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        await handleCreateWallet(defaultGoogleEmail);
+      };
+      autoProvision();
+    }
+  }, [step]);
 
   const handlePayment = async () => {
     setLoading(true);
