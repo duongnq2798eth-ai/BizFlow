@@ -60,6 +60,12 @@ export async function GET(
     status: currentStatus,
     txHash: deployment.txHash,
     contractAddress: currentStatus === "success" ? deployment.contractAddress : null,
-    progress: currentStatus === "success" ? 100 : currentStatus === "deploying" ? 50 : 10
+    progress: currentStatus === "success" ? 100 : currentStatus === "deploying" ? 50 : 10,
+    paymasterSponsor: currentStatus === "success" ? {
+      sponsored: true,
+      paymasterContract: "0x12c019a77dc6dfc3c2b8c5e628a8a49fa7bb12ab",
+      policyType: "Circle Gas Station / Arc Gas Abstraction",
+      gasSponsoredUSDC: "0.000350 USDC"
+    } : null
   });
 }

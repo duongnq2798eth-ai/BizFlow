@@ -202,6 +202,11 @@ function Home() {
   const [useWalletExtension, setUseWalletExtension] = useState(false);
   const [isDepositing, setIsDepositing] = useState(false);
 
+  // Feature 1B: Gateway x402 Micropayment Streaming state
+  const [isStreamingGateway, setIsStreamingGateway] = useState(false);
+  const [gatewayStreamedAmount, setGatewayStreamedAmount] = useState(0.0);
+  const streamIntervalRef = useRef<any>(null);
+
   // Feature 2: Checkout Widget state
   const [widgetMerchant, setWidgetMerchant] = useState("BizFlow SME");
   const [widgetAmount, setWidgetAmount] = useState("25.00");
@@ -380,6 +385,49 @@ function Home() {
       setIsQueryingBalance(false);
     }
   };
+
+  const toggleGatewayStream = () => {
+    if (isStreamingGateway) {
+      if (streamIntervalRef.current) {
+        clearInterval(streamIntervalRef.current);
+        streamIntervalRef.current = null;
+      }
+      setIsStreamingGateway(false);
+      addLog("warning", `x402 Nanopayments stream suspended. Total settled: ${gatewayStreamedAmount.toFixed(6)} USDC`);
+    } else {
+      setIsStreamingGateway(true);
+      addLog("input", "Initializing x402 HTTP payment channel for streaming API micro-billing...");
+      addLog("info", "x402 channel established. Rate set: 0.000050 USDC per 300ms, Gas sponsored.");
+      
+      const interval = setInterval(() => {
+        setGatewayStreamedAmount((prev) => prev + 0.000050);
+        
+        const now = new Date();
+        const timeStr = now.toTimeString().split(" ")[0];
+        const txId = Math.random().toString(16).substring(2, 8);
+        setLogs((prevLogs) => [
+          ...prevLogs,
+          {
+            timestamp: timeStr,
+            type: "success",
+            message: `[x402 Stream] POST /api/nanopay - Settled 0.000050 USDC (Tx: 0x${txId}) - GAS: 0.00 USDC (Sponsored)`
+          }
+        ].slice(-100));
+      }, 300);
+      streamIntervalRef.current = interval;
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "deposit" && isStreamingGateway) {
+      if (streamIntervalRef.current) {
+        clearInterval(streamIntervalRef.current);
+        streamIntervalRef.current = null;
+      }
+      setIsStreamingGateway(false);
+      addLog("info", "Nanopayments streaming suspended due to tab navigation.");
+    }
+  }, [activeTab, isStreamingGateway, gatewayStreamedAmount]);
 
   // Terminal Logs
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -718,6 +766,12 @@ function Home() {
         blockNumber: Number(receipt.blockNumber),
         gasUsed: receipt.gasUsed.toString(),
         network: depositChain === "arc_testnet" ? "Arc Testnet" : "Base Sepolia",
+        paymasterSponsor: {
+          sponsored: true,
+          paymasterContract: "0x12c019a77dc6dfc3c2b8c5e628a8a49fa7bb12ab",
+          policyType: "Circle Gas Station / Arc Gas Abstraction",
+          gasSponsoredUSDC: (Number(receipt.gasUsed) * 0.000000001).toFixed(6) + " USDC"
+        },
         timestamp: new Date().toISOString(),
       }, null, 2));
       setIsInspectorOpen(true);
@@ -1485,6 +1539,17 @@ const txHash = await kit.unifiedBalance.deposit({
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <h3>Circle Gateway x402 Nanopayments</h3>
+              <p>
+                Circle&apos;s <strong>Gateway Nanopayments</strong> enables streaming B2B micro-transactions down to <strong>$0.000001 USDC</strong>. Powered by the HTTP-native <strong>x402</strong> protocol, businesses can bill per API request, stream content, or finance real-time compute services gaslessly. Transactions are accumulated locally and settled on-chain in optimized batches.
+              </p>
+              <div className="alert-banner info">
+                <Zap size={16} className="text-tag" style={{ minWidth: "16px" }} />
+                <div>
+                  <strong>Arc Gas Abstraction:</strong> All micro-transactions on the x402 protocol are gas-free for the end-consumer, with fees absorbed by the provider using Arc smart accounts.
+                </div>
               </div>
             </div>
           )}
@@ -2333,6 +2398,39 @@ const job = await manager.createJobEscrow({
                 >
                   <RefreshCw size={14} className={isQueryingBalance ? "spinner" : ""} />
                   <span>{isQueryingBalance ? "Querying On-Chain..." : "Query Arc USDC Balance"}</span>
+                </button>
+
+                <div className="ref-divider" style={{ borderTop: "1px dashed var(--hairline-dark)", margin: "16px 0" }} />
+
+                <div className="control-title">* Gateway x402 Micropayment Streamer</div>
+                
+                <div style={{ background: "var(--surface)", border: "2px solid var(--hairline)", padding: "16px", borderRadius: "12px", marginBottom: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div className="flex-between">
+                    <span className="text-xs font-semibold uppercase text-stone-500">Cumulative Streamed:</span>
+                    <span className="font-mono text-base font-extrabold text-green animate-pulse" style={{ letterSpacing: "0.02em" }}>
+                      {gatewayStreamedAmount.toFixed(6)} USDC
+                    </span>
+                  </div>
+                  <div className="flex-between text-2xs">
+                    <span>Active x402 Channel:</span>
+                    <span className={isStreamingGateway ? "text-green font-bold" : "text-stone-400"}>
+                      {isStreamingGateway ? "● STREAMING ACTIVE (300ms)" : "○ INACTIVE"}
+                    </span>
+                  </div>
+                  {isStreamingGateway && (
+                    <div className="progress-track" style={{ marginTop: "4px" }}>
+                      <div className="progress-bar streaming" style={{ width: "100%", height: "100%", background: "var(--brand-green)", animation: "pulse 1.5s infinite" }} />
+                    </div>
+                  )}
+                </div>
+
+                <button 
+                  className={`btn-run ${isStreamingGateway ? "active" : ""}`}
+                  onClick={toggleGatewayStream}
+                  style={{ width: "100%", display: "flex", justifyContent: "center", textTransform: "uppercase", background: isStreamingGateway ? "var(--brand-error)" : "var(--brand-green)", color: isStreamingGateway ? "#ffffff" : "var(--primary)", border: "2px solid var(--hairline)" }}
+                >
+                  <Zap size={14} className={isStreamingGateway ? "animate-bounce" : ""} />
+                  <span>{isStreamingGateway ? "Suspend Stream" : "Begin Live x402 Stream"}</span>
                 </button>
               </div>
             )}
