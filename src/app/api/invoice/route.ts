@@ -482,7 +482,7 @@ export async function POST(request: NextRequest) {
           });
 
           // Retrieve all invoices to compute total amount
-          let totalUsdcAmount = 0n;
+          let totalUsdcAmount = BigInt(0);
           for (const id of invoiceIds) {
             const details = await publicClient.readContract({
               address: INVOICE_CONTRACT_ADDRESS as `0x${string}`,
@@ -722,7 +722,7 @@ export async function POST(request: NextRequest) {
               amount: formatUnits(details.amount, 6),
               dueDate: new Date(Number(details.dueDate) * 1000).toISOString(),
               createdAt: new Date(Number(details.createdAt) * 1000).toISOString(),
-              settledAt: details.settledAt > 0n ? new Date(Number(details.settledAt) * 1000).toISOString() : null,
+              settledAt: details.settledAt > BigInt(0) ? new Date(Number(details.settledAt) * 1000).toISOString() : null,
               status: statusMap[details.status] || "Unknown",
               description: details.description,
               purchaseOrderRef: details.purchaseOrderRef,
