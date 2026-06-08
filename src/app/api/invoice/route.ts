@@ -2,8 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createWalletClient, createPublicClient, http, parseUnits, formatUnits, keccak256, toBytes } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
+import { saveInvoice, getInvoices } from "@/lib/supabase";
+
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    const list = await getInvoices();
+    return NextResponse.json({ success: true, invoices: list });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 
 /**
  * BizFlowInvoice Contract ABI (deployed on Arc Testnet)
@@ -107,6 +119,31 @@ function toBytes32(val: string | undefined | null): `0x${string}` {
   return keccak256(toBytes(val));
 }
 
+async function syncInvoiceStatus(invoiceId: any, status: string, txHash?: string) {
+  try {
+    const list = await getInvoices();
+    const existing = list.find((i: any) => i.on_chain_id === invoiceId.toString() || i.id === invoiceId.toString() || i.id === `inv_sim_${invoiceId}` || (txHash && i.tx_hash === txHash));
+    if (existing) {
+      existing.status = status;
+      if (txHash) existing.tx_hash = txHash;
+      await saveInvoice(existing);
+    } else {
+      await saveInvoice({
+        id: `inv_${invoiceId || Date.now()}`,
+        on_chain_id: invoiceId?.toString() || "simulated",
+        supplier: "0xF05065f4795d15AcEF0d3981CFc00460A937171C",
+        buyer: "0x4CEF52F8241eD327B665123d24263071295cbde0",
+        amount: "0.00",
+        status: status,
+        tx_hash: txHash
+      });
+    }
+  } catch (err) {
+    console.error("Failed to sync invoice status:", err);
+  }
+}
+
+
 /**
  * POST /api/invoice
  * 
@@ -166,6 +203,16 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
 
+          await saveInvoice({
+            id: `inv_${createHash}`,
+            on_chain_id: "pending_on_chain",
+            supplier: account.address,
+            buyer,
+            amount: parseFloat(amount).toFixed(2),
+            status: "Created",
+            tx_hash: createHash
+          });
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -196,6 +243,16 @@ export async function POST(request: NextRequest) {
       // Simulation fallback
       const invoiceId = Math.floor(Math.random() * 10000);
       const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+
+      await saveInvoice({
+        id: `inv_sim_${invoiceId}`,
+        on_chain_id: invoiceId.toString(),
+        supplier: "0xF05065f4795d15AcEF0d3981CFc00460A937171C",
+        buyer,
+        amount: parseFloat(amount).toFixed(2),
+        status: "Created",
+        tx_hash: txHash
+      });
 
       return NextResponse.json({
         success: true,
@@ -249,6 +306,8 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
+          await syncInvoiceStatus(invoiceId, "Approved", approveHash);
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -269,13 +328,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Simulation fallback
+      const simTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      await syncInvoiceStatus(invoiceId, "Approved", simTxHash);
+
       return NextResponse.json({
         success: true,
         mode: "simulation",
         action: "approve",
         invoiceId,
         goodsReceiptRef: receiptRefBytes32,
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simTxHash,
         status: "Approved",
         message: "Invoice successfully approved (simulated)"
       });
@@ -340,6 +402,8 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: settleHash });
 
+          await syncInvoiceStatus(invoiceId, "Settled", settleHash);
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -360,12 +424,15 @@ export async function POST(request: NextRequest) {
       }
 
       // Simulation fallback
+      const simTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      await syncInvoiceStatus(invoiceId, "Settled", simTxHash);
+
       return NextResponse.json({
         success: true,
         mode: "simulation",
         action: "settle",
         invoiceId,
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simTxHash,
         status: "Settled",
         message: "Invoice successfully settled (simulated)"
       });
@@ -432,6 +499,10 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: batchHash });
 
+          for (const id of invoiceIds) {
+            await syncInvoiceStatus(id, "Settled", batchHash);
+          }
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -453,12 +524,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Simulation fallback
+      const simBatchHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      for (const id of invoiceIds) {
+        await syncInvoiceStatus(id, "Settled", simBatchHash);
+      }
+
       return NextResponse.json({
         success: true,
         mode: "simulation",
         action: "batch",
         invoiceIds,
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simBatchHash,
         status: "Settled",
         message: "Batch invoices successfully settled (simulated)"
       });
@@ -491,6 +567,8 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: rejectHash });
 
+          await syncInvoiceStatus(invoiceId, "Rejected", rejectHash);
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -511,13 +589,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Simulation fallback
+      const simRejectHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      await syncInvoiceStatus(invoiceId, "Rejected", simRejectHash);
+
       return NextResponse.json({
         success: true,
         mode: "simulation",
         action: "reject",
         invoiceId,
         reason,
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simRejectHash,
         status: "Rejected",
         message: "Invoice successfully rejected (simulated)"
       });
@@ -550,6 +631,8 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: disputeHash });
 
+          await syncInvoiceStatus(invoiceId, "Disputed", disputeHash);
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -569,12 +652,15 @@ export async function POST(request: NextRequest) {
       }
 
       // Simulation fallback
+      const simDisputeHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      await syncInvoiceStatus(invoiceId, "Disputed", simDisputeHash);
+
       return NextResponse.json({
         success: true,
         mode: "simulation",
         action: "dispute",
         invoiceId,
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simDisputeHash,
         status: "Disputed",
         message: "Invoice successfully disputed (simulated)"
       });

@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createWalletClient, createPublicClient, http, parseUnits, formatUnits, encodeFunctionData, keccak256, toBytes } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
+import { saveEscrowDeal, getEscrowDeals } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    const list = await getEscrowDeals();
+    return NextResponse.json({ success: true, escrow_deals: list });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 
 /**
  * BizFlowEscrow Contract ABI (deployed on Arc Testnet)
@@ -132,6 +143,31 @@ const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 // Note: This address should be set after deploying BizFlowEscrow.sol to Arc Testnet
 const ESCROW_CONTRACT_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS || "";
 
+async function syncEscrowDeal(dealId: any, status: string, txHash?: string, details?: any) {
+  try {
+    const list = await getEscrowDeals();
+    const existing = list.find((e: any) => e.on_chain_id === dealId?.toString() || e.id === dealId?.toString() || e.id === `deal_sim_${dealId}` || (txHash && e.tx_hash === txHash));
+    if (existing) {
+      existing.status = status;
+      if (txHash) existing.tx_hash = txHash;
+      if (details) Object.assign(existing, details);
+      await saveEscrowDeal(existing);
+    } else {
+      await saveEscrowDeal({
+        id: `deal_${dealId || Date.now()}`,
+        on_chain_id: dealId?.toString() || "simulated",
+        buyer: "0x4CEF52F8241eD327B665123d24263071295cbde0",
+        seller: details?.seller || "0x37648342410a82be0a8276f5713437e9081a3e51",
+        total_amount: details?.totalAmount || "0.00",
+        status: status,
+        tx_hash: txHash
+      });
+    }
+  } catch (err) {
+    console.error("Failed to sync escrow deal:", err);
+  }
+}
+
 /**
  * POST /api/escrow
  * 
@@ -214,6 +250,16 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
 
+          await saveEscrowDeal({
+            id: `deal_${createHash}`,
+            on_chain_id: "pending_on_chain",
+            buyer: account.address,
+            seller,
+            total_amount: totalAmount.toFixed(2),
+            status: "funded",
+            tx_hash: createHash
+          });
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -244,6 +290,16 @@ export async function POST(request: NextRequest) {
       // Simulation fallback
       const dealId = Math.floor(Math.random() * 10000);
       const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+
+      await saveEscrowDeal({
+        id: `deal_sim_${dealId}`,
+        on_chain_id: dealId.toString(),
+        buyer: "0x4CEF52F8241eD327B665123d24263071295cbde0",
+        seller,
+        total_amount: totalAmount.toFixed(2),
+        status: "funded",
+        tx_hash: txHash
+      });
 
       return NextResponse.json({
         success: true,
@@ -301,6 +357,8 @@ export async function POST(request: NextRequest) {
 
           const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
+          await syncEscrowDeal(dealId, "milestone_completed_and_funds_released", hash);
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -322,6 +380,9 @@ export async function POST(request: NextRequest) {
       }
 
       // Simulation
+      const simCompleteHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      await syncEscrowDeal(dealId, "milestone_completed_and_funds_released", simCompleteHash);
+
       return NextResponse.json({
         success: true,
         mode: "simulation",
@@ -329,7 +390,7 @@ export async function POST(request: NextRequest) {
         dealId,
         milestoneIndex,
         proofHash: proof,
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simCompleteHash,
         status: "milestone_completed_and_funds_released",
         message: "Funds released to seller for completed milestone (simulated)",
       });
@@ -346,6 +407,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const simDisputeHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      await syncEscrowDeal(dealId, "disputed", simDisputeHash);
+
       return NextResponse.json({
         success: true,
         mode: ESCROW_CONTRACT_ADDRESS ? "on-chain" : "simulation",
@@ -354,7 +418,7 @@ export async function POST(request: NextRequest) {
         reason: reason || "Dispute raised by buyer",
         status: "disputed",
         message: "Deal releases frozen pending resolution",
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        txHash: simDisputeHash,
       });
     }
 

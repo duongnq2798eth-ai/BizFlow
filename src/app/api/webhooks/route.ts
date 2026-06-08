@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { saveWebhookSubscription, getWebhookSubscriptions } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    const list = await getWebhookSubscriptions();
+    return NextResponse.json({ success: true, subscriptions: list });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,6 +62,14 @@ export async function POST(request: NextRequest) {
       deliveryMessage = `Network error: ${e.message || "Timeout"}`;
     }
 
+    await saveWebhookSubscription({
+      id: payload.id,
+      merchant_id: "merchant_1",
+      url: webhookUrl,
+      events: [payload.type],
+      secret: "whsec_" + Math.random().toString(36).substring(2, 10)
+    });
+
     return NextResponse.json({
       success: deliveryStatus === "success",
       deliveryStatus,
@@ -66,3 +84,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

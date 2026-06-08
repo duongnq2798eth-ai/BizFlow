@@ -3,8 +3,19 @@ import { createWalletClient, createPublicClient, http, parseUnits, erc20Abi } fr
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
 import crypto from "crypto";
+import { savePayment, getPayments } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  try {
+    const list = await getPayments();
+    return NextResponse.json({ success: true, payments: list });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
@@ -77,6 +88,16 @@ export async function POST(request: NextRequest) {
           }
 
           if (txHashes.length > 0) {
+            const finalTxHash = txHashes[txHashes.length - 1];
+            await savePayment({
+              id: batchId,
+              type: "batch",
+              recipients,
+              total_amount: totalAmount.toFixed(2),
+              tx_hash: finalTxHash,
+              batch_id: batchId
+            });
+
             return NextResponse.json({
               success: true,
               batchId,
@@ -84,7 +105,7 @@ export async function POST(request: NextRequest) {
               recipientsCount: recipients.length,
               totalSettled: totalAmount.toFixed(2),
               currency: "USDC",
-              txHash: txHashes[txHashes.length - 1],
+              txHash: finalTxHash,
               txHashes,
               network: "Arc Testnet (Circle Developer-Controlled Wallets)",
               realOnChain: true
@@ -116,15 +137,27 @@ export async function POST(request: NextRequest) {
             txHashes.push(hash);
           }
 
+          const batchId = "batch_" + Math.random().toString(36).substring(2, 10);
+          const finalTxHash = txHashes[txHashes.length - 1];
+
+          await savePayment({
+            id: batchId,
+            type: "batch",
+            recipients,
+            total_amount: totalAmount.toFixed(2),
+            tx_hash: finalTxHash,
+            batch_id: batchId
+          });
+
           // Return actual on-chain transaction details
           return NextResponse.json({
             success: true,
-            batchId: "batch_" + Math.random().toString(36).substring(2, 10),
+            batchId,
             status: "success",
             recipientsCount: recipients.length,
             totalSettled: totalAmount.toFixed(2),
             currency: "USDC",
-            txHash: txHashes[txHashes.length - 1], // Return the latest hash
+            txHash: finalTxHash,
             txHashes,
             network: "Arc Testnet (Private Key Payouts)",
             realOnChain: true
@@ -139,9 +172,20 @@ export async function POST(request: NextRequest) {
 
       // 2. Fallback simulation (if private key is not configured)
       const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+      const batchId = "batch_" + Math.random().toString(36).substring(2, 10);
+
+      await savePayment({
+        id: batchId,
+        type: "batch",
+        recipients,
+        total_amount: totalAmount.toFixed(2),
+        tx_hash: txHash,
+        batch_id: batchId
+      });
+
       return NextResponse.json({
         success: true,
-        batchId: "batch_" + Math.random().toString(36).substring(2, 10),
+        batchId,
         status: "success",
         recipientsCount: recipients.length,
         totalSettled: totalAmount.toFixed(2),
@@ -160,13 +204,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const scheduleId = "sched_" + Math.random().toString(36).substring(2, 10);
+      const totalAmount = recipients.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+
+      await savePayment({
+        id: scheduleId,
+        type: "schedule",
+        recipients,
+        total_amount: totalAmount.toFixed(2),
+        batch_id: scheduleId
+      });
+
       return NextResponse.json({
         success: true,
-        scheduleId: "sched_" + Math.random().toString(36).substring(2, 10),
+        scheduleId,
         status: "scheduled",
         executionDate: date,
         recipientsCount: recipients.length,
-        message: `Payout of ${recipients.reduce((acc, curr) => acc + parseFloat(curr.amount), 0).toFixed(2)} USDC scheduled on ${date}`
+        message: `Payout of ${totalAmount.toFixed(2)} USDC scheduled on ${date}`
       });
     }
 
