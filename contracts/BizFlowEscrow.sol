@@ -116,7 +116,7 @@ contract BizFlowEscrow {
     }
 
     modifier notDisputed(uint256 dealId) {
-        require(!deals[dealId].disputed, "Deal is disputed — releases frozen");
+        require(!deals[dealId].disputed, "Deal is disputed - releases frozen");
         _;
     }
 
