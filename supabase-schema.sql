@@ -76,3 +76,11 @@ CREATE TABLE IF NOT EXISTS credit_scores (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Nanopayment Channels Table
+CREATE TABLE IF NOT EXISTS nanopay_channels (
+  wallet_address TEXT PRIMARY KEY,
+  balance TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+

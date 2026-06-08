@@ -18,6 +18,9 @@ export interface LocalDbSchema {
   webhook_subscriptions: any[];
   delivery_attempts: any[];
   credit_scores: any[];
+  nanopay_channels: any[];
+  agents: any[];
+  agent_jobs: any[];
 }
 
 const defaultDb: LocalDbSchema = {
@@ -27,7 +30,10 @@ const defaultDb: LocalDbSchema = {
   payments: [],
   webhook_subscriptions: [],
   delivery_attempts: [],
-  credit_scores: []
+  credit_scores: [],
+  nanopay_channels: [],
+  agents: [],
+  agent_jobs: []
 };
 
 const getLocalDbPath = () => {
@@ -112,6 +118,16 @@ export async function getMerchants() {
   return readLocalDb().merchants;
 }
 
+export async function getMerchantByApiKey(apiKey: string) {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("merchants").select("*").eq("api_key", apiKey).single();
+    if (!error && data) return data;
+    console.warn("Supabase fetch merchant by api key failed, using local DB:", error);
+  }
+  const db = readLocalDb();
+  return db.merchants.find((m) => m.api_key === apiKey) || null;
+}
+
 // 2. INVOICES
 export async function saveInvoice(invoice: { id: string; on_chain_id?: string; supplier: string; buyer: string; amount: string; status: string; tx_hash?: string }) {
   const payload = {
@@ -179,7 +195,17 @@ export async function getEscrowDeals() {
 }
 
 // 4. PAYMENTS / PAYOUTS
-export async function savePayment(payment: { id: string; type: string; recipients: any; total_amount: string; tx_hash?: string; batch_id?: string }) {
+export async function savePayment(payment: {
+  id: string;
+  type: string;
+  recipients: any;
+  total_amount: string;
+  tx_hash?: string;
+  batch_id?: string;
+  admin_fee?: string;
+  net_amount?: string;
+  merchant_id?: string;
+}) {
   const payload = {
     ...payment,
     created_at: new Date().toISOString()
@@ -329,4 +355,148 @@ export async function getCreditScore(companyId: string) {
   }
   return db.credit_scores.find((c) => c.company_id === companyId) || null;
 }
+
+export async function getAllCreditScores() {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("credit_scores").select("*");
+    if (!error && data) return data;
+    console.warn("Supabase fetch all credit scores failed, using local DB:", error);
+  }
+  const db = readLocalDb();
+  return db.credit_scores || [];
+}
+
+// 8. NANOPAYMENT CHANNELS
+export async function saveNanopayChannel(walletAddress: string, balance: string) {
+  const payload = {
+    wallet_address: walletAddress.toLowerCase(),
+    balance,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("nanopay_channels").upsert(payload);
+    if (!error) return payload;
+    console.warn("Supabase upsert nanopay channel failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.nanopay_channels) {
+    db.nanopay_channels = [];
+  }
+  const index = db.nanopay_channels.findIndex((c) => c.wallet_address === walletAddress.toLowerCase());
+  if (index >= 0) {
+    db.nanopay_channels[index] = { ...db.nanopay_channels[index], ...payload };
+  } else {
+    db.nanopay_channels.push({
+      ...payload,
+      created_at: new Date().toISOString()
+    });
+  }
+  writeLocalDb(db);
+  return payload;
+}
+
+export async function getNanopayChannel(walletAddress: string) {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("nanopay_channels").select("*").eq("wallet_address", walletAddress.toLowerCase()).single();
+    if (!error && data) return data;
+    console.warn("Supabase fetch nanopay channel failed or not found, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.nanopay_channels) {
+    db.nanopay_channels = [];
+  }
+  return db.nanopay_channels.find((c) => c.wallet_address === walletAddress.toLowerCase()) || null;
+}
+
+// 9. AGENT REGISTRY & IDENTITY
+export async function saveAgent(agent: { agent_id: string; name: string; capabilities: string; wallet_address: string; private_key?: string; reputation_score: number; registry_tx_hash?: string }) {
+  const payload = {
+    ...agent,
+    agent_id: agent.agent_id.toLowerCase(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("agents").upsert(payload);
+    if (!error) return payload;
+    console.warn("Supabase upsert agent failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.agents) {
+    db.agents = [];
+  }
+  const index = db.agents.findIndex((c) => c.agent_id === agent.agent_id.toLowerCase());
+  if (index >= 0) {
+    db.agents[index] = { ...db.agents[index], ...payload };
+  } else {
+    db.agents.push({
+      ...payload,
+      created_at: new Date().toISOString()
+    });
+  }
+  writeLocalDb(db);
+  return payload;
+}
+
+export async function getAgentRecord(agentId: string) {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("agents").select("*").eq("agent_id", agentId.toLowerCase()).single();
+    if (!error && data) return data;
+    console.warn("Supabase fetch agent failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.agents) {
+    db.agents = [];
+  }
+  return db.agents.find((c) => c.agent_id === agentId.toLowerCase()) || null;
+}
+
+export async function getAllAgents() {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("agents").select("*");
+    if (!error && data) return data;
+    console.warn("Supabase fetch all agents failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.agents) {
+    db.agents = [];
+  }
+  return db.agents;
+}
+
+export async function saveAgentJob(job: { id: string; agent_id: string; amount: string; description: string; status: string; escrow_tx_hash?: string; settle_tx_hash?: string; reputation_tx_hash?: string; score?: number }) {
+  const payload = {
+    ...job,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("agent_jobs").upsert(payload);
+    if (!error) return payload;
+    console.warn("Supabase upsert agent job failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.agent_jobs) {
+    db.agent_jobs = [];
+  }
+  const index = db.agent_jobs.findIndex((c) => c.id === job.id);
+  if (index >= 0) {
+    db.agent_jobs[index] = { ...db.agent_jobs[index], ...payload };
+  } else {
+    db.agent_jobs.push({
+      ...payload,
+      created_at: new Date().toISOString()
+    });
+  }
+  writeLocalDb(db);
+  return payload;
+}
+
 
