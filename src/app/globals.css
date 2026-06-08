@@ -1860,3 +1860,46 @@ input[type="password"] {
 .flex-center { display: flex; align-items: center; justify-content: center; }
 .text-muted { color: var(--muted); }
 
+/* Premium Table Layouts */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.params-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.params-table th {
+  background: #0a0a0a;
+  color: #ffffff;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+}
+
+.params-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: #1a1a1a;
+  vertical-align: middle;
+}
+
+.params-table tr:last-child td {
+  border-bottom: none;
+}
+
+.params-table tr:hover td {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+

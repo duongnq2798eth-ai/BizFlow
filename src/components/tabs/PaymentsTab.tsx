@@ -39,6 +39,34 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({
   copyToClipboard,
   copiedText
 }) => {
+  const [payments, setPayments] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchPayments = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/payments");
+      const data = await res.json();
+      if (data.success) {
+        setPayments(data.payments || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch payments:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchPayments();
+  }, []);
+
+  React.useEffect(() => {
+    if (!isProcessingBatch && !isScheduling) {
+      fetchPayments();
+    }
+  }, [isProcessingBatch, isScheduling]);
+
   return (
     <>
       {/* Left docs column */}
@@ -91,6 +119,69 @@ const batch = await payments.payouts.createBatch({
             </code>
           </pre>
         </div>
+
+        <div className="divider" style={{ margin: "24px 0" }} />
+
+        <h3>Payout Settlement Logs</h3>
+        <p className="text-muted" style={{ fontSize: "12px", marginTop: "-8px" }}>
+          Persisted records synced from Supabase DB on Arc transactions.
+        </p>
+        {loading && payments.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>Loading historical log...</p>
+        ) : payments.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>No payouts found. Execute a batch payment to begin.</p>
+        ) : (
+          <div className="table-container">
+            <table className="params-table">
+              <thead>
+                <tr>
+                  <th>Batch/Schedule ID</th>
+                  <th>Type</th>
+                  <th>Total Amount</th>
+                  <th>Vendors</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((pmt) => (
+                  <tr key={pmt.id}>
+                    <td>
+                      <code style={{ fontSize: "10px" }}>{pmt.batch_id}</code>
+                    </td>
+                    <td>
+                      <span className="badge-tag" style={{
+                        background: pmt.type === "batch" ? "var(--brand-green-soft)" : "#eef2ff",
+                        color: pmt.type === "batch" ? "var(--brand-green-deep)" : "#4f46e5",
+                        fontSize: "10px",
+                        padding: "2px 6px",
+                        borderRadius: "4px"
+                      }}>
+                        {pmt.type}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 600, color: "var(--brand-green-deep)" }}>
+                      {pmt.total_amount} USDC
+                    </td>
+                    <td style={{ fontSize: "10px", color: "var(--muted)" }}>
+                      {pmt.recipients && Array.isArray(pmt.recipients) ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          {pmt.recipients.map((rec: any, idx: number) => (
+                            <div key={idx}>
+                              {rec.address ? `${rec.address.slice(0, 6)}...${rec.address.slice(-4)}` : "N/A"} ({rec.amount} USDC)
+                            </div>
+                          ))}
+                        </div>
+                      ) : "N/A"}
+                    </td>
+                    <td style={{ fontSize: "10px", color: "var(--muted)" }}>
+                      {new Date(pmt.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Right sandbox column */}

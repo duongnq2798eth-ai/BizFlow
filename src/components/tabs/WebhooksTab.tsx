@@ -23,6 +23,34 @@ export const WebhooksTab: React.FC<WebhooksTabProps> = ({
   copyToClipboard,
   copiedText
 }) => {
+  const [subs, setSubs] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchSubs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/webhooks");
+      const data = await res.json();
+      if (data.success) {
+        setSubs(data.subscriptions || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch webhooks:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchSubs();
+  }, []);
+
+  React.useEffect(() => {
+    if (!isTestingWebhook) {
+      fetchSubs();
+    }
+  }, [isTestingWebhook]);
+
   return (
     <>
       {/* Left docs column */}
@@ -100,6 +128,61 @@ app.post("/webhooks", (req, res) => {
             </code>
           </pre>
         </div>
+
+        <div className="divider" style={{ margin: "24px 0" }} />
+
+        <h3>Webhook Delivery Logs</h3>
+        <p className="text-muted" style={{ fontSize: "12px", marginTop: "-8px" }}>
+          Persisted records synced from Supabase DB on webhook tests.
+        </p>
+        {loading && subs.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>Loading historical log...</p>
+        ) : subs.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>No webhooks dispatched. Send a test webhook to begin.</p>
+        ) : (
+          <div className="table-container">
+            <table className="params-table">
+              <thead>
+                <tr>
+                  <th>Event ID</th>
+                  <th>Target URL</th>
+                  <th>Events</th>
+                  <th>Secret Signature Key</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subs.map((sub) => (
+                  <tr key={sub.id}>
+                    <td>
+                      <code style={{ fontSize: "10px" }}>{sub.id}</code>
+                    </td>
+                    <td style={{ fontSize: "11px", color: "var(--muted)", maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {sub.url}
+                    </td>
+                    <td>
+                      <span className="badge-tag" style={{
+                        background: "var(--brand-green-soft)",
+                        color: "var(--brand-green-deep)",
+                        fontSize: "10px",
+                        padding: "2px 6px",
+                        borderRadius: "4px"
+                      }}>
+                        {sub.events && sub.events[0]}
+                      </span>
+                    </td>
+                    <td>
+                      <code style={{ fontSize: "10px" }}>{sub.secret}</code>
+                    </td>
+                    <td style={{ fontSize: "10px", color: "var(--muted)" }}>
+                      {new Date(sub.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Right sandbox column */}

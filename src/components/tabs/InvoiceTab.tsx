@@ -69,6 +69,34 @@ export const InvoiceTab: React.FC<InvoiceTabProps> = ({
   isFetchingInvoiceStatus,
   handleGetInvoiceStatus
 }) => {
+  const [invoices, setInvoices] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchInvoices = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/invoice");
+      const data = await res.json();
+      if (data.success) {
+        setInvoices(data.invoices || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch invoices:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  React.useEffect(() => {
+    if (!isCreatingInvoice && !isProcessingInvoiceAction && !isBatchSettlingInvoices) {
+      fetchInvoices();
+    }
+  }, [isCreatingInvoice, isProcessingInvoiceAction, isBatchSettlingInvoices]);
+
   return (
     <>
       {/* Docs content */}
@@ -119,6 +147,64 @@ function batchSettle(uint256[] calldata invoiceIds) external;`}
         <p>
           Suppliers can configure an <code>earlyPayDiscount</code> represented in basis points (e.g. <code>200</code> for 2.00%). If the buyer settles the invoice before the due date, the smart contract automatically deducts the discount amount, incentivizing early payment and optimizing the supplier's working capital.
         </p>
+
+        <div className="divider" style={{ margin: "24px 0" }} />
+
+        <h3>Historical Invoice Log</h3>
+        <p className="text-muted" style={{ fontSize: "12px", marginTop: "-8px" }}>
+          Persisted records synced from Supabase DB on Arc transactions.
+        </p>
+        {loading && invoices.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>Loading historical log...</p>
+        ) : invoices.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>No invoices found. Create one in the playground to begin.</p>
+        ) : (
+          <div className="table-container">
+            <table className="params-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Supplier/Buyer</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td>
+                      <code style={{ fontSize: "10px" }}>{inv.on_chain_id === "pending_on_chain" ? "Pending" : inv.on_chain_id}</code>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>From: {inv.supplier ? `${inv.supplier.slice(0, 6)}...${inv.supplier.slice(-4)}` : "N/A"}</span>
+                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>To: {inv.buyer ? `${inv.buyer.slice(0, 6)}...${inv.buyer.slice(-4)}` : "N/A"}</span>
+                      </div>
+                    </td>
+                    <td style={{ fontWeight: 600, color: "var(--brand-green-deep)" }}>
+                      {inv.amount} USDC
+                    </td>
+                    <td>
+                      <span className="badge-tag" style={{
+                        background: inv.status === "Settled" ? "var(--brand-green-soft)" : inv.status === "Approved" ? "#eef2ff" : inv.status === "Rejected" ? "#fef2f2" : "#fef3c7",
+                        color: inv.status === "Settled" ? "var(--brand-green-deep)" : inv.status === "Approved" ? "#4f46e5" : inv.status === "Rejected" ? "var(--brand-error)" : "var(--brand-warn)",
+                        fontSize: "10px",
+                        padding: "2px 6px",
+                        borderRadius: "4px"
+                      }}>
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: "10px", color: "var(--muted)" }}>
+                      {new Date(inv.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Sandbox Controls Portal */}

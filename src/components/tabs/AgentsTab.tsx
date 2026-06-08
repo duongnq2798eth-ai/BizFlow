@@ -27,6 +27,40 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
   agentJobTxHash,
   runAgentJob
 }) => {
+  const [deals, setDeals] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchDeals = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/escrow");
+      const data = await res.json();
+      if (data.success) {
+        setDeals(data.escrow_deals || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch escrow deals:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchDeals();
+  }, []);
+
+  React.useEffect(() => {
+    if (!isHiringAgent) {
+      fetchDeals();
+    }
+  }, [isHiringAgent]);
+
+  React.useEffect(() => {
+    if (agentJobStep === "settled" || agentJobStep === "idle") {
+      fetchDeals();
+    }
+  }, [agentJobStep]);
+
   return (
     <>
       {/* Left docs column */}
@@ -48,6 +82,64 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
         <p>
           ERC-8004 provides metadata standards for autonomous agent wallets. This maps agent capability scores, past completion rates, and cryptographic public keys to allow corporate platforms to trust agent operations without custody risk.
         </p>
+
+        <div className="divider" style={{ margin: "24px 0" }} />
+
+        <h3>Escrow Deal History</h3>
+        <p className="text-muted" style={{ fontSize: "12px", marginTop: "-8px" }}>
+          Persisted records synced from Supabase DB on Arc transactions.
+        </p>
+        {loading && deals.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>Loading historical log...</p>
+        ) : deals.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: "12px" }}>No escrow deals found. Hire an agent to create one.</p>
+        ) : (
+          <div className="table-container">
+            <table className="params-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Buyer/Seller</th>
+                  <th>Total Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deals.map((deal) => (
+                  <tr key={deal.id}>
+                    <td>
+                      <code style={{ fontSize: "10px" }}>{deal.on_chain_id === "pending_on_chain" ? "Pending" : deal.on_chain_id}</code>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>Buyer: {deal.buyer ? `${deal.buyer.slice(0, 6)}...${deal.buyer.slice(-4)}` : "N/A"}</span>
+                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>Seller: {deal.seller ? `${deal.seller.slice(0, 6)}...${deal.seller.slice(-4)}` : "N/A"}</span>
+                      </div>
+                    </td>
+                    <td style={{ fontWeight: 600, color: "var(--brand-green-deep)" }}>
+                      {deal.total_amount} USDC
+                    </td>
+                    <td>
+                      <span className="badge-tag" style={{
+                        background: deal.status === "completed" || deal.status === "milestone_completed_and_funds_released" || deal.status === "funded" ? "var(--brand-green-soft)" : deal.status === "disputed" ? "#fef2f2" : "#eef2ff",
+                        color: deal.status === "completed" || deal.status === "milestone_completed_and_funds_released" || deal.status === "funded" ? "var(--brand-green-deep)" : deal.status === "disputed" ? "var(--brand-error)" : "#4f46e5",
+                        fontSize: "10px",
+                        padding: "2px 6px",
+                        borderRadius: "4px"
+                      }}>
+                        {deal.status === "milestone_completed_and_funds_released" ? "released" : deal.status}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: "10px", color: "var(--muted)" }}>
+                      {new Date(deal.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Right sandbox column */}
