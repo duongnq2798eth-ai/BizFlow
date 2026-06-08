@@ -168,6 +168,30 @@ async function syncEscrowDeal(dealId: any, status: string, txHash?: string, deta
   }
 }
 
+async function triggerEscrowWebhook(request: NextRequest, eventType: string, dealId: any, txHash: string, details?: any) {
+  try {
+    const host = request.headers.get("host") || "localhost:3000";
+    const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https");
+    const webhookUrl = `${protocol}://${host}/api/webhooks`;
+
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventType: eventType,
+        data: {
+          dealId: dealId?.toString() || "simulated",
+          txHash: txHash,
+          status: eventType === "escrow.deal.created" ? "funded" : "milestone_completed_and_funds_released",
+          details: details || {}
+        }
+      })
+    });
+  } catch (err) {
+    console.warn("[Webhook Trigger] Internal escrow webhook trigger failed:", err);
+  }
+}
+
 /**
  * POST /api/escrow
  * 
@@ -260,6 +284,12 @@ export async function POST(request: NextRequest) {
             tx_hash: createHash
           });
 
+          await triggerEscrowWebhook(request, "escrow.deal.created", createHash, createHash, {
+            seller,
+            totalAmount: totalAmount.toFixed(2),
+            milestoneCount: milestoneAmounts.length
+          });
+
           return NextResponse.json({
             success: true,
             mode: "on-chain",
@@ -299,6 +329,12 @@ export async function POST(request: NextRequest) {
         total_amount: totalAmount.toFixed(2),
         status: "funded",
         tx_hash: txHash
+      });
+
+      await triggerEscrowWebhook(request, "escrow.deal.created", dealId, txHash, {
+        seller,
+        totalAmount: totalAmount.toFixed(2),
+        milestoneCount: milestoneAmounts.length
       });
 
       return NextResponse.json({
@@ -358,6 +394,10 @@ export async function POST(request: NextRequest) {
           const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
           await syncEscrowDeal(dealId, "milestone_completed_and_funds_released", hash);
+          await triggerEscrowWebhook(request, "escrow.milestone.completed", dealId, hash, {
+            milestoneIndex: Number(milestoneIndex),
+            proofHash: proof
+          });
 
           return NextResponse.json({
             success: true,
@@ -382,6 +422,10 @@ export async function POST(request: NextRequest) {
       // Simulation
       const simCompleteHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
       await syncEscrowDeal(dealId, "milestone_completed_and_funds_released", simCompleteHash);
+      await triggerEscrowWebhook(request, "escrow.milestone.completed", dealId, simCompleteHash, {
+        milestoneIndex: Number(milestoneIndex),
+        proofHash: proof
+      });
 
       return NextResponse.json({
         success: true,

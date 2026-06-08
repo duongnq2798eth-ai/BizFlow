@@ -143,6 +143,29 @@ async function syncInvoiceStatus(invoiceId: any, status: string, txHash?: string
   }
 }
 
+async function triggerInvoiceSettledWebhook(request: NextRequest, invoiceId: any, txHash: string) {
+  try {
+    const host = request.headers.get("host") || "localhost:3000";
+    const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https");
+    const webhookUrl = `${protocol}://${host}/api/webhooks`;
+
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventType: "invoice.settled",
+        data: {
+          invoiceId: invoiceId.toString(),
+          txHash: txHash,
+          status: "Settled"
+        }
+      })
+    });
+  } catch (err) {
+    console.warn("[Webhook Trigger] Internal trigger failed:", err);
+  }
+}
+
 
 /**
  * POST /api/invoice
@@ -403,6 +426,7 @@ export async function POST(request: NextRequest) {
           const receipt = await publicClient.waitForTransactionReceipt({ hash: settleHash });
 
           await syncInvoiceStatus(invoiceId, "Settled", settleHash);
+          await triggerInvoiceSettledWebhook(request, invoiceId, settleHash);
 
           return NextResponse.json({
             success: true,
@@ -426,6 +450,7 @@ export async function POST(request: NextRequest) {
       // Simulation fallback
       const simTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
       await syncInvoiceStatus(invoiceId, "Settled", simTxHash);
+      await triggerInvoiceSettledWebhook(request, invoiceId, simTxHash);
 
       return NextResponse.json({
         success: true,
