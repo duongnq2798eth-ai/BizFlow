@@ -232,7 +232,24 @@ export default function CheckoutWidget() {
     setError("");
     try {
       let resultTxHash = "";
-      if (isPasskeyMode) {
+      if (selectedCurrency === "EURC") {
+        // Execute real swap via StableFX route
+        const swapResponse = await fetch("/api/appkit/stablefx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount,
+            fromToken: "EURC",
+            toToken: "USDC",
+            execute: true
+          })
+        });
+        const swapData = await swapResponse.json();
+        if (!swapResponse.ok || !swapData.success) {
+          throw new Error(swapData.error || "StableFX EURC→USDC swap execution failed.");
+        }
+        resultTxHash = swapData.transaction?.txHash || swapData.quote?.txHash || "0xsim_fx_swap";
+      } else if (isPasskeyMode) {
         // Submit signed UserOp through server execute endpoint
         const payResponse = await fetch("/api/modular-wallets/execute", {
           method: "POST",
@@ -521,7 +538,7 @@ export default function CheckoutWidget() {
               </div>
               <div className="tx-row" style={{ justifyContent: "center", marginTop: "8px" }}>
                 <a 
-                  href={`https://explorer.testnet.arc.network/tx/${txHash}`} 
+                  href={`https://testnet.arcscan.app/tx/${txHash}`} 
                   target="_blank" 
                   rel="noreferrer"
                   style={{

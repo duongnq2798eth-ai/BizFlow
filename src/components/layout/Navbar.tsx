@@ -58,11 +58,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             />
             <span style={{ fontSize: "11px", textTransform: "none" }}>
-              {rpcStatus === "online"
-                ? `Node Online (#${liveBlockNumber || "..."})`
-                : rpcStatus === "connecting"
-                ? "Connecting RPC..."
-                : "RPC Offline"}
+              {rpcStatus === "online" ? (
+                liveBlockNumber ? (
+                  <a
+                    href={`https://testnet.arcscan.app/block/${liveBlockNumber}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: "underline", color: "inherit" }}
+                  >
+                    Node Online (#{liveBlockNumber})
+                  </a>
+                ) : (
+                  "Node Online (#...)"
+                )
+              ) : rpcStatus === "connecting" ? (
+                "Connecting RPC..."
+              ) : (
+                "RPC Offline"
+              )}
             </span>
           </div>
 
@@ -70,6 +83,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Terminal size={14} />
             <span>Gas: {liveGasPrice ? `${liveGasPrice} USDC` : "0.00 USDC"}</span>
           </div>
+
+          <a
+            href="/merchant"
+            className={styles["nav-link-item"]}
+            style={{ color: "#00d4a4", fontWeight: "bold" }}
+          >
+            <span>Merchant Portal</span>
+            <ArrowUpRight size={12} />
+          </a>
+
+          <a
+            href="/analytics"
+            className={styles["nav-link-item"]}
+            style={{ color: "#38bdf8", fontWeight: "bold" }}
+          >
+            <span>Analytics</span>
+            <ArrowUpRight size={12} />
+          </a>
 
           <a
             href="https://testnet.arcscan.app/"

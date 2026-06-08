@@ -11,6 +11,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import Terminal from "@/components/layout/Terminal";
 import PayloadInspector from "@/components/layout/PayloadInspector";
 import SearchModal from "@/components/layout/SearchModal";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 // Tab Components
 import DepositTab from "@/components/tabs/DepositTab";
@@ -190,6 +191,15 @@ export default function Home() {
     runAgentJob,
     agentJobStep,
     agentJobTxHash,
+    agentsList,
+    isRegisteringAgent,
+    newAgentId,
+    setNewAgentId,
+    newAgentName,
+    setNewAgentName,
+    newAgentCapabilities,
+    setNewAgentCapabilities,
+    handleRegisterAgent,
     selectedSdkLang,
     setSelectedSdkLang,
     copiedText,
@@ -431,6 +441,15 @@ export default function Home() {
         agentJobStep={agentJobStep}
         agentJobTxHash={agentJobTxHash}
         runAgentJob={runAgentJob}
+        agentsList={agentsList}
+        isRegisteringAgent={isRegisteringAgent}
+        newAgentId={newAgentId}
+        setNewAgentId={setNewAgentId}
+        newAgentName={newAgentName}
+        setNewAgentName={setNewAgentName}
+        newAgentCapabilities={newAgentCapabilities}
+        setNewAgentCapabilities={setNewAgentCapabilities}
+        handleRegisterAgent={handleRegisterAgent}
       />
     );
   }
@@ -474,7 +493,13 @@ export default function Home() {
 
         {/* Center documentation & code samples column */}
         <section className="docs-content">
-          {isInfoTab ? <InfoTabs activeTab={activeTab as any} /> : docs}
+          {isInfoTab ? (
+            <InfoTabs activeTab={activeTab as any} />
+          ) : (
+            <ErrorBoundary fallbackTitle={`Docs error for tab "${activeTab}"`}>
+              {docs}
+            </ErrorBoundary>
+          )}
         </section>
 
         {/* Right interaction sandbox console panel */}
@@ -485,7 +510,9 @@ export default function Home() {
 
           <div className="playground-controls">
             {!isInfoTab ? (
-              sandbox
+              <ErrorBoundary fallbackTitle={`Playground error for tab "${activeTab}"`}>
+                {sandbox}
+              </ErrorBoundary>
             ) : (
               <>
                 {activeTab === "about" && (
