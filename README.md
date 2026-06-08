@@ -8,47 +8,65 @@ BizFlow is a production-grade, investor-ready stablecoin commerce gateway and de
 
 BizFlow is architected with a hybrid static-serverless paradigm using the **Next.js App Router**. This design delivers an ultra-fast developer documentation site while providing robust, secure serverless endpoints to communicate with blockchain adapters, manage sandbox states, and securely issue sessions.
 
-### 1. High-Level System Architecture
-This diagram outlines the major blocks of the BizFlow ecosystem, depicting how B2B developers, retail customers, serverless API routes, and the Arc Testnet RPC node interact.
+### 1. High-Level System Architecture & Circle Integrations
+This diagram outlines the major blocks of the BizFlow ecosystem, mapping the frontend client tiers, Next.js API endpoints, and smart contracts to Circle platform products and the Arc Testnet ledger.
 
 ```mermaid
 flowchart TD
-    %% Define Nodes
     subgraph Clients["Client Tier (User Interfaces)"]
-        Dev["B2B Developer Portal (Docs & Playground)"]
-        Widget["Embeddable Checkout Widget (Iframe)"]
-        Palette["Command Palette Overlay (Ctrl+K)"]
+        Portal["B2B SME Portal (Docs & Playground)"]
+        Widget["Embeddable Checkout Widget"]
+        Analytics["Analytics BI Dashboard"]
+    end
+
+    subgraph CirclePlatform["Circle Product Suite (Integration Points)"]
+        AppKit["@circle-fin/app-kit (Send, Bridge, Swap)"]
+        Gateway["Circle Gateway Nanopayments"]
+        Wallets["Circle Developer-Controlled & Agent Wallets"]
+        StableFX["StableFX API (EURC <-> USDC Swaps)"]
     end
 
     subgraph API_Gateway["Application Server (Next.js Serverless Routes)"]
-        SessionAPI["/api/session (HttpOnly Cookie Auth)"]
-        CreditAPI["/api/credit (Credit Score & Drawdowns)"]
         PaymentsAPI["/api/payments (Batch & Scheduled Payouts)"]
-        TreasuryAPI["/api/treasury (CCTP & Swaps)"]
-        TemplatesAPI["/templates/... (Contract Deployer)"]
-        WebhookHub["/api/webhooks (Delivery Agent)"]
+        InvoiceAPI["/api/invoice (Milestones & PO Matching)"]
+        EscrowAPI["/api/credit (Collateral & Drawdowns)"]
+        NanopayAPI["/api/nanopay (Micropayments billing)"]
+        AgentsAPI["/api/agents (ERC-8004 Registry & Escrows)"]
+        TreasuryAPI["/api/treasury (CCTP & Yield Swaps)"]
     end
 
-    subgraph Network["Blockchain Tier"]
-        ArcRPC["Arc Testnet RPC Node (rpc.testnet.arc.network)"]
-        USDC_Contract["USDC Gas/Asset Token (0x36000...)"]
-        CCTP["Circle CCTP Protocol"]
+    subgraph Contracts["Smart Contracts Tier"]
+        InvoiceContract["BizFlowInvoice.sol (PO Match)"]
+        EscrowContract["BizFlowEscrow.sol (Milestones)"]
+        AgentRegistry["BizFlowAgentRegistry.sol (ERC-8004)"]
     end
 
-    %% Define Interactions
-    Dev -->|Interactive Snippets| API_Gateway
-    Widget -->|OAuth Session Check| SessionAPI
-    Palette -->|Client-side Router| Dev
-    
+    subgraph Network["Blockchain Tier (Arc Testnet)"]
+        ArcRPC["Arc RPC Node (rpc.testnet.arc.network)"]
+        USDC_Contract["Native Gas USDC Token (0x36000...)"]
+        CCTPNative["CCTP Mint/Burn Contract (Circle)"]
+    end
+
+    Portal -->|App Kit API| AppKit
+    Widget -->|x402 Micropayments| Gateway
+    PaymentsAPI -->|DCW Payouts| Wallets
+    InvoiceAPI -->|EURC Swap| StableFX
+
+    AppKit --> API_Gateway
+    Gateway --> NanopayAPI
+    Wallets --> API_Gateway
+    StableFX --> InvoiceAPI
+
     API_Gateway -->|JSON-RPC Requests| ArcRPC
-    Dev -->|On-Chain Read balanceOf| ArcRPC
-    ArcRPC -->|Asset Balance Lookup| USDC_Contract
-    TreasuryAPI -->|Burn/Mint Calls| CCTP
+    ArcRPC -->|interact| Contracts
+    Contracts -->|Gas Paid In| USDC_Contract
+    API_Gateway -->|CCTP mint/burn| CCTPNative
 ```
 
-* **Client Tier:** Contains the primary interactive developer platform and the secure embeddable Checkout Widget. The Checkout Widget isolates customer credentials by rendering inside an `iframe`.
+* **Client Tier:** Contains the primary interactive developer platform, the secure embeddable Checkout Widget, and the BI Analytics dashboard.
+* **Circle Product Suite:** Direct developer integration points utilizing Circle APIs and SDKs to manage transactions, wallets, swap rates, and micropayments.
 * **Application Server (Next.js API Routes):** Acts as a secure middleware layer. It holds server-side simulation rules, formats raw payloads, and shields private keys from being exposed to client browsers.
-* **Blockchain Tier:** The live integration layer that queries the Arc Testnet JSON-RPC node for block numbers, gas pricing, and ERC-20 token balances using raw `eth_call` hex payloads.
+* **Blockchain Tier:** The live integration layer that queries the Arc Testnet JSON-RPC node for block numbers, gas pricing, and ERC-20 token balances.
 
 ---
 
@@ -412,11 +430,10 @@ await kit.bridge({
 
 // Real App Kit Swap (POST /api/appkit/swap)
 await kit.swap({
-  adapter,
-  chain: "Arc_Testnet",
-  amount: "500.00",
-  fromToken: "USDC",
-  toToken: "EURC",
+  from: { adapter, chain: "Arc_Testnet" },
+  tokenIn: "USDC",
+  tokenOut: "EURC",
+  amountIn: "500.00",
 });
 ```
 
@@ -448,34 +465,35 @@ import { arcTestnet } from "viem/chains";
 
 ## 💬 Circle Product Feedback
 
-### What Worked Well
+BizFlow utilizes the comprehensive Circle Developer Platform to deliver professional, automated trade treasury products. Below is our developer experience feedback for each product integrated:
 
-1. **App Kit SDK (`@circle-fin/app-kit`)** — The unified SDK that bundles Send, Bridge, Swap, and Unified Balance into a single package is remarkably developer-friendly. The `AppKit` class provides a clean, consistent API surface that eliminated the need to manually manage CCTP burn/mint flows or swap routing. The `createViemAdapterFromPrivateKey` factory function made it trivial to reuse the same adapter across all capabilities.
+### 1. USDC
+* **What Worked Well:** The stability, high liquidity, and widespread adoption of USDC make it the ideal settlement currency for SME commerce. Integrating USDC on Arc Testnet allows developers to enjoy native gas transactions, removing the need for a volatile gas token and simplifying accounting.
+* **What Could Be Improved:** No native issues. Maintaining 6 decimals for ERC-20 transfers but 18 decimals for Arc Gas parameters can occasionally cause integration friction during unit translations. A uniform helper library for decimal conversion across chains would improve DevEx.
 
-2. **Arc Testnet's USDC-Native Gas** — Having USDC as the native gas token (Chain ID: 5042002) is a game-changer for B2B fintech applications. Our SME users no longer need to acquire a separate volatile token just to pay transaction fees. Gas costs are denominated in the same stablecoin they already use for trade settlements, making cost accounting straightforward and predictable.
+### 2. App Kit (`@circle-fin/app-kit`)
+* **What Worked Well:** The unified API format for sending, swapping, and bridging is a major improvement over manually managing separate libraries. Reusing a single wallet adapter via `createViemAdapterFromPrivateKey` accelerates backend integrations.
+* **What Could Be Improved:** Type schemas evolved across major versions (e.g. swap parameters structure changing to nested adapters). Keep documentation inline with the latest NPM releases, particularly detail parameters like `estimatedOutput`.
 
-3. **Sub-Second Finality** — Arc Testnet's sub-second block confirmation eliminates the "pending transaction" UX that plagues Ethereum L1. For our procurement escrow workflows, this means milestone fund releases feel instant to suppliers — a critical UX improvement for B2B adoption.
+### 3. CCTP (Cross-Chain Transfer Protocol)
+* **What Worked Well:** Providing native, non-custodial bridging of USDC across EVM chains (e.g. Base to Arc) without utilizing third-party wrapped liquidity bridges. This ensures security of treasury allocations.
+* **What Could Be Improved:** Transaction propagation times across networks can be unpredictable during high congestion. An SDK event stream for tracking the exact CCTP state machine phases (burn -> attest -> mint) would help construct better frontend progress indicators.
 
-4. **viem/chains Integration** — The `arcTestnet` chain being available directly in `viem/chains` (v2.50+) removed all boilerplate. No custom `defineChain()` calls needed — just import and use.
+### 4. Developer-Controlled & User-Controlled Wallets
+* **What Worked Well:** Exceptional security for API key signatures, and seamless wallet creation on the server side using the `@circle-fin/modular-wallets-core` framework. Zero-gas user transactions and biometric passkeys streamline checkout flows.
+* **What Could Be Improved:** Initial setup of webhook notifications and challenge handshakes for programmatic wallets has a steep learning curve. Clearer end-to-end sandbox walkthrough code snippets would reduce onboarding time.
 
-### What Could Be Improved
+### 5. Gateway (Gateway API & Nanopayments)
+* **What Worked Well:** Sub-cent payment channels allow micro-billing capabilities. Implementing the `x402` HTTP payment protocol allows automated agent tools to authorize payouts dynamically per call without signing manual metamask popups.
+* **What Could Be Improved:** Gateway sandbox rates and balance sync delays can occur. Direct documentation of local simulation tools for offline testing would speed up channel development.
 
-1. **App Kit Documentation Discoverability** — While the quickstart guides are excellent, discovering the full TypeScript type definitions for `SendParams`, `BridgeParams`, and `SwapParams` required digging into `node_modules`. A comprehensive TypeDoc-generated API reference would accelerate integration.
+### 6. StableFX API
+* **What Worked Well:** Providing institutional rate quotes and executing seamless EURC <-> USDC on-chain swaps. This facilitates frictionless multi-currency B2B trade pipelines.
+* **What Could Be Improved:** Access to the live StableFX API is gated behind enterprise KYC checks. Providing a standard testnet endpoint with a sandbox rate feed open to public developers would enhance hackathon and prototype flows.
 
-2. **Testnet Faucet UX** — The Circle Faucet at `faucet.circle.com` is functional, but the rate limit (one drip per address per period) made rapid prototyping challenging when testing multiple wallet scenarios. A developer-mode with higher limits for hackathon participants would be helpful.
-
-3. **Gateway SDK for Unified Balance** — We'd love a client-side React component or hook (e.g., `<UnifiedBalanceWidget />` or `useUnifiedBalance()`) that renders a multi-chain USDC balance view out-of-the-box. Currently, building the aggregated balance UI requires manually querying each chain.
-
-4. **Smart Contract Deployment Templates** — Circle could provide pre-audited Solidity templates for common stablecoin patterns (escrow, invoice, payroll split) that are optimized for USDC's 6-decimal precision. This would reduce the barrier for developers building trade finance applications.
-
-### Why We Chose These Products
-
-For **Track 2: SME Finance & Trade Workflows**, the combination of App Kit + Arc Testnet + USDC provides the ideal stack because:
-
-- **SME merchants** need predictable costs (USDC gas eliminates volatility)
-- **Cross-border trade** requires frictionless fund movement (CCTP V2 via App Kit Bridge)
-- **Procurement workflows** demand milestone-based escrow with instant settlement (sub-second finality)
-- **API-first design** serves developer integrations (App Kit's programmatic interface)
+### 7. Nanopayments
+* **What Worked Well:** Settled high-frequency micro-payments ($0.00005 USDC) on-chain instantly, enabling live API billing.
+* **What Could Be Improved:** The process of depositing and withdrawing from a nanopayment channel is heavily dependent on specific precompiles. Prebuilt client hooks in the Web SDK to manage channel state variables would be useful.
 
 ---
 
