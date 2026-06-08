@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
         explorerUrl: result.explorerUrl,
       },
       estimate: estimate ? {
-        gasEstimate: estimate.gasEstimate?.toString(),
-        fee: estimate.fee?.toString(),
+        gasEstimate: estimate.gas?.toString(),
+        fee: estimate.fee,
       } : null,
       params: {
         recipient,

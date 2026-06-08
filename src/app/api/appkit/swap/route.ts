@@ -62,11 +62,13 @@ export async function POST(request: NextRequest) {
     });
 
     const swapParams = {
-      adapter,
-      chain: chain as "Arc_Testnet",
-      amount,
-      fromToken,
-      toToken,
+      from: {
+        adapter,
+        chain: chain as "Arc_Testnet",
+      },
+      tokenIn: fromToken as any,
+      tokenOut: toToken as any,
+      amountIn: amount,
     };
 
     // Estimate swap
@@ -81,17 +83,13 @@ export async function POST(request: NextRequest) {
       sdkUsed: "@circle-fin/app-kit → kit.swap()",
       adapterUsed: "@circle-fin/adapter-viem-v2 → createViemAdapterFromPrivateKey()",
       result: {
-        steps: result.steps?.map((step: any) => ({
-          name: step.name,
-          state: step.state,
-          txHash: step.txHash,
-          explorerUrl: step.explorerUrl || step.data?.explorerUrl,
-        })),
+        txHash: result.txHash,
+        explorerUrl: result.explorerUrl,
       },
       estimate: estimate ? {
-        outputAmount: estimate.outputAmount?.toString(),
-        priceImpact: estimate.priceImpact?.toString(),
-        fee: estimate.fee?.toString(),
+        outputAmount: estimate.estimatedOutput?.amount,
+        priceImpact: (estimate as any).priceImpact?.toString(),
+        fee: (estimate as any).fee?.toString(),
       } : null,
       params: {
         amount,

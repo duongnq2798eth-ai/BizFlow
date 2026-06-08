@@ -3,12 +3,20 @@ import { createWalletClient, createPublicClient, http, parseUnits, erc20Abi } fr
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "viem/chains";
 import crypto from "crypto";
-import { savePayment, getPayments } from "@/lib/supabase";
+import { savePayment, getPayments, getMerchantByApiKey } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const apiKey = request.headers.get("x-api-key") || request.headers.get("authorization")?.replace("Bearer ", "");
+    if (apiKey) {
+      const merchant = await getMerchantByApiKey(apiKey);
+      if (!merchant) {
+        return NextResponse.json({ error: "Unauthorized: Invalid API key" }, { status: 401 });
+      }
+    }
+
     const list = await getPayments();
     return NextResponse.json({ success: true, payments: list });
   } catch (err: any) {
@@ -22,10 +30,34 @@ const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 
 export async function POST(request: NextRequest) {
   try {
+    const apiKey = request.headers.get("x-api-key") || request.headers.get("authorization")?.replace("Bearer ", "");
+    let merchant: any = null;
+    if (apiKey) {
+      merchant = await getMerchantByApiKey(apiKey);
+      if (!merchant) {
+        return NextResponse.json({ error: "Unauthorized: Invalid API key" }, { status: 401 });
+      }
+    }
+
     const body = await request.json();
     const { action, recipients, date } = body;
 
     const privateKey = process.env.MERCHANT_PRIVATE_KEY || process.env.NEXT_PUBLIC_MERCHANT_PRIVATE_KEY;
+
+    // Resolve fee policy split percentage from merchant configuration
+    let adminSplitPercent = 1.0;
+    if (merchant && merchant.fee_policy) {
+      try {
+        const parsedPolicy = typeof merchant.fee_policy === "string" 
+          ? JSON.parse(merchant.fee_policy) 
+          : merchant.fee_policy;
+        if (parsedPolicy && parsedPolicy.adminSplitPercent !== undefined) {
+          adminSplitPercent = parseFloat(parsedPolicy.adminSplitPercent);
+        }
+      } catch (e) {
+        console.warn("Failed to parse merchant fee policy:", e);
+      }
+    }
 
     if (action === "batch") {
       if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
@@ -52,6 +84,8 @@ export async function POST(request: NextRequest) {
       }
 
       const totalAmount = recipients.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+      const adminFee = totalAmount * (adminSplitPercent / 100);
+      const netAmount = totalAmount - adminFee;
 
       // 1. Primary Live Option: Circle Developer-Controlled Wallets (DCW) API
       const circleApiKey = process.env.CIRCLE_API_KEY;
@@ -95,7 +129,10 @@ export async function POST(request: NextRequest) {
               recipients,
               total_amount: totalAmount.toFixed(2),
               tx_hash: finalTxHash,
-              batch_id: batchId
+              batch_id: batchId,
+              admin_fee: adminFee.toFixed(4),
+              net_amount: netAmount.toFixed(4),
+              merchant_id: merchant?.id || null
             });
 
             return NextResponse.json({
@@ -146,7 +183,10 @@ export async function POST(request: NextRequest) {
             recipients,
             total_amount: totalAmount.toFixed(2),
             tx_hash: finalTxHash,
-            batch_id: batchId
+            batch_id: batchId,
+            admin_fee: adminFee.toFixed(4),
+            net_amount: netAmount.toFixed(4),
+            merchant_id: merchant?.id || null
           });
 
           // Return actual on-chain transaction details
@@ -180,7 +220,10 @@ export async function POST(request: NextRequest) {
         recipients,
         total_amount: totalAmount.toFixed(2),
         tx_hash: txHash,
-        batch_id: batchId
+        batch_id: batchId,
+        admin_fee: adminFee.toFixed(4),
+        net_amount: netAmount.toFixed(4),
+        merchant_id: merchant?.id || null
       });
 
       return NextResponse.json({
@@ -206,13 +249,18 @@ export async function POST(request: NextRequest) {
 
       const scheduleId = "sched_" + Math.random().toString(36).substring(2, 10);
       const totalAmount = recipients.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+      const adminFee = totalAmount * (adminSplitPercent / 100);
+      const netAmount = totalAmount - adminFee;
 
       await savePayment({
         id: scheduleId,
         type: "schedule",
         recipients,
         total_amount: totalAmount.toFixed(2),
-        batch_id: scheduleId
+        batch_id: scheduleId,
+        admin_fee: adminFee.toFixed(4),
+        net_amount: netAmount.toFixed(4),
+        merchant_id: merchant?.id || null
       });
 
       return NextResponse.json({

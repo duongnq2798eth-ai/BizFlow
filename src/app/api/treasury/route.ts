@@ -53,11 +53,13 @@ export async function POST(request: NextRequest) {
       const adapter = createViemAdapterFromPrivateKey({ privateKey });
 
       const swapParams = {
-        adapter,
-        chain: "Arc_Testnet" as const,
-        amount,
-        fromToken,
-        toToken,
+        from: {
+          adapter,
+          chain: "Arc_Testnet" as const,
+        },
+        tokenIn: fromToken as any,
+        tokenOut: toToken as any,
+        amountIn: amount,
       };
 
       // Estimate swap
@@ -66,15 +68,8 @@ export async function POST(request: NextRequest) {
       // Execute swap
       const result = await kit.swap(swapParams);
 
-      const stepsMapped = result.steps?.map((step: any) => ({
-        name: step.name,
-        state: step.state,
-        txHash: step.txHash,
-        explorerUrl: step.explorerUrl || step.data?.explorerUrl,
-      })) || [];
-
-      const txHash = stepsMapped[0]?.txHash || result.txHash || "";
-      const outputAmount = estimate?.outputAmount ? parseFloat(estimate.outputAmount) : parseFloat(amount) * 0.998;
+      const txHash = result.txHash || "";
+      const outputAmount = estimate?.estimatedOutput?.amount ? parseFloat(estimate.estimatedOutput.amount) : parseFloat(amount) * 0.998;
 
       return NextResponse.json({
         success: true,
@@ -85,7 +80,7 @@ export async function POST(request: NextRequest) {
         outputAmount: outputAmount.toFixed(4),
         outputToken: toToken,
         txHash,
-        steps: stepsMapped,
+        steps: [],
         network: "Arc Testnet",
         apyEstimate: toToken === "USYC" ? "5.45% APY (Tokenized US Treasuries)" : null,
         message: `Successfully swapped ${amount} ${fromToken} to ${outputAmount.toFixed(4)} ${toToken} on Arc via App Kit.`
@@ -149,6 +144,8 @@ export async function POST(request: NextRequest) {
       const burnTxHash = stepsMapped.find((s: any) => s.name.toLowerCase().includes("burn") || s.name.toLowerCase().includes("deposit"))?.txHash || stepsMapped[0]?.txHash || "";
       const mintTxHash = stepsMapped.find((s: any) => s.name.toLowerCase().includes("mint") || s.name.toLowerCase().includes("claim") || s.name.toLowerCase().includes("withdraw"))?.txHash || stepsMapped[1]?.txHash || "";
 
+      const gasFeeValue = (estimate as any)?.fee || (estimate as any)?.fees?.[0]?.amount || "0.00";
+
       return NextResponse.json({
         success: true,
         type: "bridge",
@@ -160,7 +157,7 @@ export async function POST(request: NextRequest) {
         mintTxHash,
         steps: stepsMapped,
         status: "completed",
-        gasFeeUSDC: estimate?.fee ? `${estimate.fee} USDC` : "0.00 (USDC Gas Sponsor)",
+        gasFeeUSDC: `${gasFeeValue} USDC`,
         message: `Successfully bridged ${amount} USDC from ${sourceChain} to ${targetChain} via CCTP / App Kit Bridge.`
       });
     }

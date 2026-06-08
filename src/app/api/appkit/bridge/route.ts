@@ -87,9 +87,8 @@ export async function POST(request: NextRequest) {
         })),
       },
       estimate: estimate ? {
-        gasEstimate: estimate.gasEstimate?.toString(),
-        fee: estimate.fee?.toString(),
-        transferSpeed: estimate.transferSpeed,
+        gasFees: estimate.gasFees,
+        fees: estimate.fees,
       } : null,
       params: {
         amount,
