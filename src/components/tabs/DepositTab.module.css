@@ -1,0 +1,51 @@
+.privateKeyWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.privateKeyWrapper input {
+  padding-right: 48px !important;
+}
+
+.keyToggleBtn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--steel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.keyToggleBtn:hover {
+  color: var(--ink);
+}
+
+.walletExtensionAlert {
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.deployButtonSpacer {
+  margin: 8px 0;
+}
+
+.streamStatusWrapper {
+  margin: 10px 0;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  borderRadius: 8px;
+}
+
+.streamStatusTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}

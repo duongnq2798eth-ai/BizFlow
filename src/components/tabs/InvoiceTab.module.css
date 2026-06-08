@@ -1,0 +1,36 @@
+.invoiceActionsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.auditCard {
+  margin-top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-dark);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.auditHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+}
+
+.auditDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--hairline-dark);
+  margin: 16px 0;
+}

@@ -1,0 +1,135 @@
+.sidebar {
+  width: 280px;
+  border-right: 2px solid var(--hairline);
+  padding: 32px 20px;
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-group-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+  padding-left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-group-header::before {
+  content: "*";
+  color: var(--brand-green);
+}
+
+.sidebar-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 2px solid transparent;
+  background: transparent;
+  color: var(--steel);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 9999px;
+  transition: all 0.2s;
+}
+
+.sidebar-item.active {
+  background-color: var(--canvas-dark);
+  color: #ffffff;
+  border-color: var(--hairline);
+  box-shadow: none;
+}
+
+.sidebar-item:hover:not(.active) {
+  background-color: var(--surface);
+  border-color: var(--hairline);
+  color: var(--ink);
+}
+
+.ref-card {
+  background: var(--surface);
+  border: 2px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ref-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--steel);
+}
+
+.ref-row span:last-child {
+  font-family: var(--font-mono);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: 12px 16px;
+    gap: 10px;
+    background: var(--canvas);
+    border-right: none;
+    border-bottom: 1px solid var(--hairline-soft);
+    scrollbar-width: none;
+  }
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+  .sidebar-group {
+    flex-direction: row;
+    gap: 8px;
+    margin-top: 0 !important;
+  }
+  .sidebar-group-header {
+    display: none;
+  }
+  .sidebar-item {
+    width: auto;
+    display: inline-flex;
+    padding: 6px 12px;
+  }
+  .sidebar-item.active {
+    border-left: none;
+    border-bottom: 2px solid var(--brand-green);
+    border-radius: 0;
+    padding-left: 12px;
+    padding-bottom: 4px;
+  }
+  .ref-card {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .sidebar-item {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+}

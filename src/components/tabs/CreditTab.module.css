@@ -1,0 +1,81 @@
+.creditScoreCard {
+  background: var(--surface);
+  border: 2px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.scoreBadgeRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scoreLabel {
+  font-family: var(--font-syne);
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.scoreBadge {
+  font-family: var(--font-syne);
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--brand-green);
+  border: 2px solid var(--brand-green);
+  padding: 4px 12px;
+  border-radius: 6px;
+  background-color: rgba(0, 212, 164, 0.1);
+}
+
+.scoreBadge.AAA {
+  color: var(--brand-green);
+  border-color: var(--brand-green);
+  background-color: rgba(0, 212, 164, 0.1);
+}
+
+.scoreBadge.AA {
+  color: var(--brand-green);
+  border-color: var(--brand-green);
+  background-color: rgba(0, 212, 164, 0.05);
+}
+
+.scoreBadge.A {
+  color: #a8d5e5;
+  border-color: #a8d5e5;
+  background-color: rgba(168, 213, 229, 0.1);
+}
+
+.scoreBadge.B {
+  color: var(--brand-warn);
+  border-color: var(--brand-warn);
+  background-color: rgba(245, 158, 11, 0.1);
+}
+
+.scoreBadge.C {
+  color: var(--brand-warn);
+  border-color: var(--brand-warn);
+  background-color: rgba(245, 158, 11, 0.15);
+}
+
+.scoreBadge.D {
+  color: var(--brand-error);
+  border-color: var(--brand-error);
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.scoreDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--hairline-dark);
+  margin: 16px 0;
+}

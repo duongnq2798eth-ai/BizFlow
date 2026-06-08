@@ -1,0 +1,49 @@
+.splitVisualizer {
+  background: var(--surface);
+  border: 1px solid var(--hairline-dark);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.visualizerHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-syne);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.splitBarContainer {
+  display: flex;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.splitBarAdmin {
+  background-color: var(--brand-green);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s;
+}
+
+.splitBarNetwork {
+  background-color: var(--steel);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s;
+}
