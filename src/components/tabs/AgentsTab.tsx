@@ -1,5 +1,5 @@
 import React from "react";
-import { Info, Play } from "lucide-react";
+import { Info, Play, UserPlus, ShieldAlert, Award } from "lucide-react";
 import styles from "./AgentsTab.module.css";
 
 interface AgentsTabProps {
@@ -13,6 +13,17 @@ interface AgentsTabProps {
   agentJobStep: "idle" | "escrow" | "working" | "submitting" | "settled";
   agentJobTxHash: string;
   runAgentJob: () => void;
+  
+  // New props for ERC-8004 Registry & Agent Wallets
+  agentsList: any[];
+  isRegisteringAgent: boolean;
+  newAgentId: string;
+  setNewAgentId: (val: string) => void;
+  newAgentName: string;
+  setNewAgentName: (val: string) => void;
+  newAgentCapabilities: string;
+  setNewAgentCapabilities: (val: string) => void;
+  handleRegisterAgent: () => void;
 }
 
 export const AgentsTab: React.FC<AgentsTabProps> = ({
@@ -25,7 +36,17 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
   isHiringAgent,
   agentJobStep,
   agentJobTxHash,
-  runAgentJob
+  runAgentJob,
+  
+  agentsList,
+  isRegisteringAgent,
+  newAgentId,
+  setNewAgentId,
+  newAgentName,
+  setNewAgentName,
+  newAgentCapabilities,
+  setNewAgentCapabilities,
+  handleRegisterAgent
 }) => {
   const [deals, setDeals] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -78,10 +99,110 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
           </div>
         </div>
 
-        <h3>Agent Registry &amp; Identity</h3>
-        <p>
-          ERC-8004 provides metadata standards for autonomous agent wallets. This maps agent capability scores, past completion rates, and cryptographic public keys to allow corporate platforms to trust agent operations without custody risk.
+        {/* ERC-8004 Registry Display */}
+        <h3>ERC-8004 Registered Agent Identifiers</h3>
+        <p className="text-muted" style={{ fontSize: "12px", marginTop: "-8px" }}>
+          Active identity registries querying from Arc Testnet and localized caches.
         </p>
+        
+        <div className="table-container" style={{ marginBottom: "24px" }}>
+          <table className="params-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Capabilities</th>
+                <th>Wallet Address</th>
+                <th>Reputation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agentsList.map((agent) => (
+                <tr key={agent.agentId}>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Award size={14} className="text-tag" />
+                      <strong style={{ color: "#ffffff" }}>{agent.name}</strong>
+                    </div>
+                    <code style={{ fontSize: "9px", color: "var(--steel)" }}>ID: {agent.agentId}</code>
+                  </td>
+                  <td style={{ fontSize: "11px", maxWidth: "160px", whiteSpace: "normal", wordBreak: "break-word" }}>
+                    {agent.capabilities}
+                  </td>
+                  <td>
+                    <a
+                      href={`https://testnet.arcscan.app/address/${agent.walletAddress}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: "10px", fontFamily: "monospace", color: "var(--accent)" }}
+                    >
+                      {agent.walletAddress.slice(0, 6)}...{agent.walletAddress.slice(-4)}
+                    </a>
+                  </td>
+                  <td>
+                    <span className="badge-tag" style={{
+                      background: agent.reputationScore >= 95 ? "var(--brand-green-soft)" : "rgba(245, 158, 11, 0.1)",
+                      color: agent.reputationScore >= 95 ? "var(--brand-green-deep)" : "#f59e0b",
+                      fontSize: "10px",
+                      padding: "2px 6px"
+                    }}>
+                      {agent.reputationScore}% score
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Register Agent Form */}
+        <div className="control-group" style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px dashed var(--hairline-dark)", padding: "16px", borderRadius: "8px" }}>
+          <div className="control-title" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <UserPlus size={16} className="text-tag" />
+            <span>Register Custom AI Agent (ERC-8004)</span>
+          </div>
+          <p className="text-muted" style={{ fontSize: "11px", marginBottom: "12px" }}>
+            Associate an autonomous capabilities agent with a secure Circle MPC Wallet and register their key on-chain.
+          </p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="input-field">
+              <label>Agent Identifier (lowercase)</label>
+              <input
+                type="text"
+                placeholder="e.g. taxbot"
+                value={newAgentId}
+                onChange={(e) => setNewAgentId(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+              />
+            </div>
+            <div className="input-field">
+              <label>Display Name</label>
+              <input
+                type="text"
+                placeholder="e.g. TaxAuditBot"
+                value={newAgentName}
+                onChange={(e) => setNewAgentName(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="input-field" style={{ marginTop: "8px" }}>
+            <label>Capabilities / Job Deliverable Spec</label>
+            <input
+              type="text"
+              placeholder="e.g. Reconcile corporate spending and file tax compliance proofs"
+              value={newAgentCapabilities}
+              onChange={(e) => setNewAgentCapabilities(e.target.value)}
+            />
+          </div>
+
+          <button
+            className="btn-run"
+            onClick={handleRegisterAgent}
+            disabled={isRegisteringAgent || !newAgentId || !newAgentName || !newAgentCapabilities}
+            style={{ width: "100%", marginTop: "12px", background: "linear-gradient(135deg, var(--accent) 0%, #6366f1 100%)" }}
+          >
+            <span>{isRegisteringAgent ? "Registering on Arc Testnet..." : "Register AI Agent Profile"}</span>
+          </button>
+        </div>
 
         <div className="divider" style={{ margin: "24px 0" }} />
 
@@ -90,7 +211,11 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
           Persisted records synced from Supabase DB on Arc transactions.
         </p>
         {loading && deals.length === 0 ? (
-          <p className="text-muted" style={{ fontSize: "12px" }}>Loading historical log...</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", margin: "12px 0" }}>
+            <div style={{ height: "36px", width: "100%" }} className="skeleton-box" />
+            <div style={{ height: "36px", width: "100%" }} className="skeleton-box" />
+            <div style={{ height: "36px", width: "100%" }} className="skeleton-box" />
+          </div>
         ) : deals.length === 0 ? (
           <p className="text-muted" style={{ fontSize: "12px" }}>No escrow deals found. Hire an agent to create one.</p>
         ) : (
@@ -153,21 +278,24 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
               value={selectedAgent}
               onChange={(e) => {
                 setSelectedAgent(e.target.value);
-                if (e.target.value === "TaxAuditBot") {
-                  setAgentJobAmount("10.00");
-                  setAgentJobDescription("Reconcile Q1 corporate expense sheet against USDC invoices");
-                } else if (e.target.value === "TreasuryMaxBot") {
-                  setAgentJobAmount("25.00");
-                  setAgentJobDescription("Optimize swap allocations & lock yield positions on Base Sepolia");
-                } else {
-                  setAgentJobAmount("15.00");
-                  setAgentJobDescription("Compose & distribute stablecoin adoption reports to partners");
+                const selected = agentsList.find(a => a.agentId === e.target.value);
+                if (selected) {
+                  setAgentJobDescription(selected.capabilities || "");
+                  if (selected.name.toLowerCase().includes("tax")) {
+                    setAgentJobAmount("10.00");
+                  } else if (selected.name.toLowerCase().includes("treasury")) {
+                    setAgentJobAmount("25.00");
+                  } else {
+                    setAgentJobAmount("15.00");
+                  }
                 }
               }}
             >
-              <option value="TaxAuditBot">TaxAuditBot (Score: 99% | Rate: 10.00 USDC)</option>
-              <option value="TreasuryMaxBot">TreasuryMaxBot (Score: 100% | Rate: 25.00 USDC)</option>
-              <option value="MarketingGenBot">MarketingGenBot (Score: 96% | Rate: 15.00 USDC)</option>
+              {agentsList.map((agent) => (
+                <option key={agent.agentId} value={agent.agentId}>
+                  {agent.name} (Reputation: {agent.reputationScore}% | Rate: {agent.name.toLowerCase().includes("tax") ? "10" : agent.name.toLowerCase().includes("treasury") ? "25" : "15"}.00 USDC)
+                </option>
+              ))}
             </select>
           </div>
 
@@ -206,7 +334,7 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
               <div className={styles.lifecycleList}>
                 <div className={styles.lifecycleRow}>
                   <span>1. ERC-8183 Job Escrow Locked:</span>
-                  <span className={agentJobStep !== "idle" ? "text-green font-semibold" : "text-muted"}>
+                  <span className="text-green font-semibold">
                     {agentJobStep === "escrow" ? "PENDING..." : "CONFIRMED"}
                   </span>
                 </div>
@@ -252,7 +380,7 @@ export const AgentsTab: React.FC<AgentsTabProps> = ({
             style={{ width: "100%", marginTop: "12px" }}
           >
             <Play size={14} />
-            <span>{isHiringAgent ? "Broadcasting Escrow Deal..." : "Hire AI Agent (On-Chain)"}</span>
+            <span>{isHiringAgent ? "Executing AI Job Flow..." : "Hire AI Agent (On-Chain)"}</span>
           </button>
         </div>
       </div>

@@ -111,12 +111,70 @@ export function useBizFlowApp() {
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
 
   // AI Agent Workforce state (ERC-8183 Escrow & ERC-8004 identity)
-  const [selectedAgent, setSelectedAgent] = useState("TaxAuditBot");
+  const [selectedAgent, setSelectedAgent] = useState("taxauditbot");
   const [agentJobAmount, setAgentJobAmount] = useState("10.00");
   const [agentJobDescription, setAgentJobDescription] = useState("Reconcile Q1 corporate expense sheet against USDC invoices");
   const [isHiringAgent, setIsHiringAgent] = useState(false);
   const [agentJobStep, setAgentJobStep] = useState<"idle" | "escrow" | "working" | "submitting" | "settled">("idle");
   const [agentJobTxHash, setAgentJobTxHash] = useState("");
+  const [agentsList, setAgentsList] = useState<any[]>([]);
+  const [isRegisteringAgent, setIsRegisteringAgent] = useState(false);
+  const [newAgentId, setNewAgentId] = useState("");
+  const [newAgentName, setNewAgentName] = useState("");
+  const [newAgentCapabilities, setNewAgentCapabilities] = useState("");
+
+  const fetchAgents = async () => {
+    try {
+      const res = await fetch("/api/agents");
+      const data = await res.json();
+      if (data.success) {
+        setAgentsList(data.agents || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch agents list:", e);
+    }
+  };
+
+  const handleRegisterAgent = async () => {
+    if (!newAgentId || !newAgentName || !newAgentCapabilities) {
+      addLog("error", "Failed: Agent ID, Name, and Capabilities are required.");
+      return;
+    }
+    setIsRegisteringAgent(true);
+    addLog("input", `POST /api/agents/register { agentId: "${newAgentId}", name: "${newAgentName}", capabilities: "${newAgentCapabilities}" }`);
+    try {
+      const res = await fetch("/api/agents/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: newAgentId,
+          name: newAgentName,
+          capabilities: newAgentCapabilities
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to register agent");
+      
+      addLog("success", `AI Agent successfully registered (Mode: ${data.mode})!`);
+      addLog("success", `Agent Wallet: ${data.agent.walletAddress}`);
+      addLog("success", `ERC-8004 Registry Tx Hash: ${data.agent.registryTxHash}`);
+      
+      setActiveResponsePayload(JSON.stringify(data, null, 2));
+      setIsInspectorOpen(true);
+      await fetchAgents();
+      setNewAgentId("");
+      setNewAgentName("");
+      setNewAgentCapabilities("");
+    } catch (e: any) {
+      addLog("error", `Agent registration failed: ${e.message}`);
+    } finally {
+      setIsRegisteringAgent(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
 
   // SDK state
   const [selectedSdkLang, setSelectedSdkLang] = useState<"typescript" | "python" | "go">("typescript");
@@ -221,7 +279,7 @@ export function useBizFlowApp() {
           ...prevLogs,
           {
             timestamp: timeStr,
-            type: "success",
+            type: "success" as const,
             message: `[x402 Stream] POST /api/nanopay - Settled 0.000050 USDC (Tx: 0x${txId}) - GAS: 0.00 USDC (Sponsored)`
           }
         ].slice(-30));
@@ -302,42 +360,38 @@ export function useBizFlowApp() {
   const runAgentJob = async () => {
     setIsHiringAgent(true);
     setAgentJobStep("escrow");
-    addLog("input", `POST /api/escrow { action: "create", seller: "0x8183E5c700000000000000000000000000000000", milestoneAmounts: ["${agentJobAmount}"], description: "${agentJobDescription}" }`);
+    addLog("input", `POST /api/agents/execute { agentId: "${selectedAgent}", amount: "${agentJobAmount}", description: "${agentJobDescription}" }`);
     addLog("info", `Initializing ERC-8183 Job Escrow contract on Arc Testnet...`);
     addLog("info", `Target Agent (ERC-8004 Registry): ${selectedAgent}`);
     addLog("info", `Task Description: "${agentJobDescription}"`);
     addLog("info", `Escrow Balance: ${agentJobAmount} USDC`);
 
     try {
-      const createResponse = await fetch("/api/escrow", {
+      const response = await fetch("/api/agents/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "create",
-          seller: "0x8183E5c700000000000000000000000000000000", // Representative AI Agent Account
-          milestoneAmounts: [agentJobAmount],
+          agentId: selectedAgent.toLowerCase(),
+          amount: agentJobAmount,
           description: agentJobDescription
         })
       });
 
-      const createData = await createResponse.json();
-      if (!createResponse.ok) {
-        throw new Error(createData.error || "Failed to create trade escrow deal.");
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to execute agent job");
       }
 
-      const dealId = createData.dealId || 101;
-      const jobTxHash = createData.txHash;
-      addLog("success", `ERC-8183 Job Escrow locked successfully! Mode: ${createData.mode}`);
-      addLog("success", `Transaction Hash: ${jobTxHash}`);
-      if (createData.mode === "on-chain") {
-        addLog("success", `Active Escrow Contract: ${createData.contract}`);
-      }
-      setAgentJobTxHash(jobTxHash);
-
+      const dealId = data.jobId || 101;
+      const jobTxHash = data.escrowTxHash;
+      
       // Step 2: Agent Working
       setAgentJobStep("working");
+      addLog("success", `ERC-8183 Job Escrow locked successfully! Mode: ${data.mode}`);
+      addLog("success", `Transaction Hash: ${jobTxHash}`);
+      setAgentJobTxHash(jobTxHash);
       addLog("info", `AI Agent [${selectedAgent}] started task execution...`);
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Step 3: Deliverable Submitted
       setAgentJobStep("submitting");
@@ -346,26 +400,16 @@ export function useBizFlowApp() {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // Step 4: Settle Escrow & Complete Milestone
-      addLog("input", `POST /api/escrow { action: "complete", dealId: ${dealId}, milestoneIndex: 0 }`);
-      const completeResponse = await fetch("/api/escrow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "complete",
-          dealId,
-          milestoneIndex: 0
-        })
-      });
-
-      const completeData = await completeResponse.json();
-      if (!completeResponse.ok) {
-        throw new Error(completeData.error || "Failed to complete milestone.");
-      }
-
       setAgentJobStep("settled");
       addLog("success", `Evaluator verification PASSED! Milestone completed on-chain.`);
-      addLog("success", `Transaction Hash: ${completeData.txHash}`);
-      addLog("success", `Transferred ${agentJobAmount} USDC from Escrow to AI Agent's wallet.`);
+      addLog("success", `USDC released to Agent wallet: ${data.agentWallet}`);
+      addLog("success", `Escrow Release Tx Hash: ${data.settleTxHash}`);
+      addLog("success", `On-chain Reputation update Tx Hash: ${data.reputationTxHash}`);
+      addLog("success", `Agent Reputation updated to: ${data.newReputation}%`);
+
+      setActiveResponsePayload(JSON.stringify(data, null, 2));
+      setIsInspectorOpen(true);
+      await fetchAgents();
     } catch (e: any) {
       addLog("error", `Agent escrow execution failed: ${e.message}`);
     } finally {
@@ -1292,5 +1336,14 @@ export function useBizFlowApp() {
     handleGenerateSandboxKey,
     isPrivateKeyValid,
     copyToClipboard,
+    agentsList,
+    isRegisteringAgent,
+    newAgentId,
+    setNewAgentId,
+    newAgentName,
+    setNewAgentName,
+    newAgentCapabilities,
+    setNewAgentCapabilities,
+    handleRegisterAgent,
   };
 }
