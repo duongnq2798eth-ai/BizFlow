@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect } from "react";
-import { Loader2, ShieldCheck, Wallet, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, ShieldCheck, Wallet, ArrowRight, CheckCircle2, Fingerprint } from "lucide-react";
 
 export default function CheckoutWidget() {
   const [merchantName, setMerchantName] = useState("BizFlow SME");
@@ -16,6 +16,10 @@ export default function CheckoutWidget() {
   const [error, setError] = useState("");
   const [targetOrigin, setTargetOrigin] = useState("*");
   
+  // Passkey Specific States
+  const [isPasskeyMode, setIsPasskeyMode] = useState(false);
+  const [passkeyLoadingText, setPasskeyLoadingText] = useState("");
+
   // Dynamic StableFX Currency States
   const [selectedCurrency, setSelectedCurrency] = useState("USDC");
   const [convertedAmount, setConvertedAmount] = useState("25.00");
@@ -98,6 +102,7 @@ export default function CheckoutWidget() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError("");
+    setIsPasskeyMode(false);
     // Simulate OAuth 2.0 secure credential handshake
     await new Promise((resolve) => setTimeout(resolve, 1500));
     setLoading(false);
@@ -112,6 +117,7 @@ export default function CheckoutWidget() {
     }
     setLoading(true);
     setError("");
+    setIsPasskeyMode(false);
 
     try {
       // 1. Request real/simulated User-Controlled Wallet session parameters
@@ -170,9 +176,46 @@ export default function CheckoutWidget() {
     }
   };
 
-  // Automatically trigger wallet provisioning when entering intermediate loading spinner page
+  const handlePasskeyPayment = async () => {
+    if (!email || !email.includes("@")) {
+      setError("Please enter a valid email address first to register/retrieve passkey.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setIsPasskeyMode(true);
+    setPasskeyLoadingText("Initializing passkey environment...");
+
+    try {
+      // 1. Initialize provisioning on backend
+      setPasskeyLoadingText("Requesting wallet credentials challenge from Circle API...");
+      const createResponse = await fetch("/api/modular-wallets/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: email })
+      });
+      
+      const createData = await createResponse.json();
+      if (!createResponse.ok || !createData.success) {
+        throw new Error(createData.error || "Failed to provision passkey wallet.");
+      }
+
+      // 2. Client-side biometrics handshake challenge (FaceID/TouchID)
+      setPasskeyLoadingText("Handshaking biometrics (TouchID / FaceID / Passkey)...");
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // simulation of hardware trigger
+
+      setWalletAddress(createData.walletAddress);
+      setLoading(false);
+      setStep("confirm");
+    } catch (err: any) {
+      setError("Passkey registration failed: " + err.message);
+      setLoading(false);
+    }
+  };
+
+  // Automatically trigger wallet provisioning when entering intermediate loading spinner page (for Google oauth)
   useEffect(() => {
-    if (step === "wallet") {
+    if (step === "wallet" && !isPasskeyMode) {
       const autoProvision = async () => {
         const defaultGoogleEmail = "google-user@bizflow.sme";
         setEmail(defaultGoogleEmail);
@@ -182,29 +225,48 @@ export default function CheckoutWidget() {
       };
       autoProvision();
     }
-  }, [step]);
+  }, [step, isPasskeyMode]);
 
   const handlePayment = async () => {
     setLoading(true);
     setError("");
     try {
-      // Execute transaction on-chain via backend payment route using Arc Testnet USDC (sponsored, zero-gas)
-      // If user paid in EURC, perform StableFX swap execution during checkout
-      const payResponse = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "batch",
-          recipients: [{ address: "0x82f1839db08c7e6f8dfd445ebdf04a11f224976a", amount: convertedAmount }]
-        })
-      });
+      let resultTxHash = "";
+      if (isPasskeyMode) {
+        // Submit signed UserOp through server execute endpoint
+        const payResponse = await fetch("/api/modular-wallets/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress,
+            calls: [{ to: "0x82f1839db08c7e6f8dfd445ebdf04a11f224976a", amount: convertedAmount }]
+          })
+        });
 
-      const payData = await payResponse.json();
-      if (!payResponse.ok) {
-        throw new Error(payData.error || "On-chain payment execution failed.");
+        const payData = await payResponse.json();
+        if (!payResponse.ok || !payData.success) {
+          throw new Error(payData.error || "Passkey on-chain payment execution failed.");
+        }
+        resultTxHash = payData.txHash;
+      } else {
+        // Execute transaction on-chain via standard payments API
+        const payResponse = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "batch",
+            recipients: [{ address: "0x82f1839db08c7e6f8dfd445ebdf04a11f224976a", amount: convertedAmount }]
+          })
+        });
+
+        const payData = await payResponse.json();
+        if (!payResponse.ok) {
+          throw new Error(payData.error || "On-chain payment execution failed.");
+        }
+        resultTxHash = payData.txHash;
       }
 
-      setTxHash(payData.txHash);
+      setTxHash(resultTxHash);
       setLoading(false);
       setStep("success");
 
@@ -216,7 +278,7 @@ export default function CheckoutWidget() {
             amount: convertedAmount,
             originalAmount: amount,
             currency: selectedCurrency,
-            txHash: payData.txHash,
+            txHash: resultTxHash,
             walletAddress
           },
           targetOrigin
@@ -284,7 +346,7 @@ export default function CheckoutWidget() {
                 className="btn-google"
                 disabled={loading}
               >
-                {loading ? (
+                {loading && !isPasskeyMode ? (
                   <Loader2 size={16} className="spinner" />
                 ) : (
                   <svg className="g-logo" viewBox="0 0 24 24" width="16" height="16">
@@ -308,19 +370,44 @@ export default function CheckoutWidget() {
                 />
               </div>
 
+              {/* Pay with Passkey Button */}
               <button 
-                onClick={handleCreateWallet} 
+                onClick={handlePasskeyPayment} 
+                className="btn-primary"
+                disabled={loading || !email}
+                style={{
+                  background: "linear-gradient(135deg, #00d4a4 0%, #009b75 100%)",
+                  color: "#ffffff",
+                  borderColor: "transparent",
+                  marginBottom: "8px"
+                }}
+              >
+                {loading && isPasskeyMode ? (
+                  <>
+                    <Loader2 size={16} className="spinner" />
+                    <span>Processing Biometrics...</span>
+                  </>
+                ) : (
+                  <>
+                    <Fingerprint size={16} />
+                    <span>Pay Gasless with Passkey</span>
+                  </>
+                )}
+              </button>
+
+              <button 
+                onClick={() => handleCreateWallet()} 
                 className="btn-primary"
                 disabled={loading || !email}
               >
-                {loading ? (
+                {loading && !isPasskeyMode ? (
                   <>
                     <Loader2 size={16} className="spinner" />
                     <span>Creating Wallet...</span>
                   </>
                 ) : (
                   <>
-                    <span>Next</span>
+                    <span>Next (Legacy Email PIN)</span>
                     <ArrowRight size={16} />
                   </>
                 )}
@@ -335,9 +422,11 @@ export default function CheckoutWidget() {
           <div style={{ textAlign: "center" }}>
             <div className="summary">
               <Loader2 size={36} className="spinner logo-green" style={{ margin: "0 auto 16px" }} />
-              <div className="merchant-name" style={{ fontSize: "16px" }}>Creating User-Controlled Wallet</div>
+              <div className="merchant-name" style={{ fontSize: "16px" }}>
+                {isPasskeyMode ? "Initializing Passkey Wallet" : "Creating User-Controlled Wallet"}
+              </div>
               <p style={{ fontSize: "13px", color: "#5a5a5c", marginTop: "8px" }}>
-                Initializing Circle W3S non-custodial wallet infrastructure on Arc Network...
+                {isPasskeyMode ? passkeyLoadingText : "Initializing Circle W3S non-custodial wallet infrastructure on Arc Network..."}
               </p>
             </div>
           </div>
@@ -366,8 +455,12 @@ export default function CheckoutWidget() {
                   <span style={{ color: "#00d4a4", fontWeight: 600 }}>Arc Testnet</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#5a5a5c" }}>Gas Token:</span>
-                  <span style={{ fontWeight: 600 }}>USDC (Sponsored/Native)</span>
+                  <span style={{ color: "#5a5a5c" }}>Wallet Type:</span>
+                  <span style={{ fontWeight: 600 }}>{isPasskeyMode ? "Modular (Passkey)" : "User-Controlled"}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#5a5a5c" }}>Gas Fee:</span>
+                  <span style={{ color: "#10b981", fontWeight: 600 }}>$0.00 (Sponsored by Paymaster)</span>
                 </div>
               </div>
             </div>
@@ -385,7 +478,7 @@ export default function CheckoutWidget() {
                 </>
               ) : (
                 <>
-                  <ShieldCheck size={16} />
+                  {isPasskeyMode ? <Fingerprint size={16} /> : <ShieldCheck size={16} />}
                   <span>Authorize & Pay {convertedAmount} USDC</span>
                 </>
               )}
@@ -418,9 +511,28 @@ export default function CheckoutWidget() {
                   <span style={{ fontWeight: 500 }}>{amount} {selectedCurrency}</span>
                 </div>
               )}
+              <div className="tx-row">
+                <span style={{ color: "#5a5a5c" }}>Gas Fee Paid:</span>
+                <span style={{ fontWeight: 600, color: "#10b981" }}>$0.00 (Sponsored)</span>
+              </div>
               <div className="tx-row" style={{ flexDirection: "column", marginTop: "6px" }}>
                 <span style={{ color: "#5a5a5c", marginBottom: "2px" }}>Transaction Hash:</span>
                 <span className="tx-value">{txHash}</span>
+              </div>
+              <div className="tx-row" style={{ justifyContent: "center", marginTop: "8px" }}>
+                <a 
+                  href={`https://explorer.testnet.arc.network/tx/${txHash}`} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  style={{
+                    color: "#00d4a4",
+                    textDecoration: "underline",
+                    fontSize: "11px",
+                    fontWeight: 600
+                  }}
+                >
+                  View on ArcScan
+                </a>
               </div>
             </div>
 
