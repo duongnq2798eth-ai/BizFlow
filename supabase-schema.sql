@@ -64,3 +64,15 @@ CREATE TABLE IF NOT EXISTS delivery_attempts (
   attempted_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Credit Scores Cache Table
+CREATE TABLE IF NOT EXISTS credit_scores (
+  company_id TEXT PRIMARY KEY,
+  score TEXT NOT NULL,
+  credit_limit TEXT NOT NULL,
+  interest_rate TEXT NOT NULL,
+  total_volume TEXT NOT NULL,
+  settlements_count INTEGER NOT NULL,
+  avg_settlement_time TEXT NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+

@@ -17,6 +17,7 @@ export interface LocalDbSchema {
   payments: any[];
   webhook_subscriptions: any[];
   delivery_attempts: any[];
+  credit_scores: any[];
 }
 
 const defaultDb: LocalDbSchema = {
@@ -25,7 +26,8 @@ const defaultDb: LocalDbSchema = {
   escrow_deals: [],
   payments: [],
   webhook_subscriptions: [],
-  delivery_attempts: []
+  delivery_attempts: [],
+  credit_scores: []
 };
 
 const getLocalDbPath = () => {
@@ -277,5 +279,54 @@ export async function getDeliveryAttempts() {
   }
   const db = readLocalDb();
   return db.delivery_attempts || [];
+}
+
+// 7. CREDIT SCORES
+export async function saveCreditScore(scoreRecord: {
+  company_id: string;
+  score: string;
+  credit_limit: string;
+  interest_rate: string;
+  total_volume: string;
+  settlements_count: number;
+  avg_settlement_time: string;
+}) {
+  const payload = {
+    ...scoreRecord,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("credit_scores").upsert(payload);
+    if (!error) return payload;
+    console.warn("Supabase upsert credit score failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.credit_scores) {
+    db.credit_scores = [];
+  }
+  const index = db.credit_scores.findIndex((c) => c.company_id === scoreRecord.company_id);
+  if (index >= 0) {
+    db.credit_scores[index] = { ...db.credit_scores[index], ...payload };
+  } else {
+    db.credit_scores.push(payload);
+  }
+  writeLocalDb(db);
+  return payload;
+}
+
+export async function getCreditScore(companyId: string) {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("credit_scores").select("*").eq("company_id", companyId).single();
+    if (!error && data) return data;
+    console.warn("Supabase fetch credit score failed or not found, using local DB:", error);
+  }
+  
+  const db = readLocalDb();
+  if (!db.credit_scores) {
+    db.credit_scores = [];
+  }
+  return db.credit_scores.find((c) => c.company_id === companyId) || null;
 }
 
