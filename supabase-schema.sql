@@ -54,3 +54,13 @@ CREATE TABLE IF NOT EXISTS webhook_subscriptions (
   secret TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Webhook Delivery Attempts Table
+CREATE TABLE IF NOT EXISTS delivery_attempts (
+  id TEXT PRIMARY KEY,
+  webhook_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  response_code INTEGER,
+  attempted_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+

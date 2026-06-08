@@ -16,6 +16,7 @@ export interface LocalDbSchema {
   escrow_deals: any[];
   payments: any[];
   webhook_subscriptions: any[];
+  delivery_attempts: any[];
 }
 
 const defaultDb: LocalDbSchema = {
@@ -23,7 +24,8 @@ const defaultDb: LocalDbSchema = {
   invoices: [],
   escrow_deals: [],
   payments: [],
-  webhook_subscriptions: []
+  webhook_subscriptions: [],
+  delivery_attempts: []
 };
 
 const getLocalDbPath = () => {
@@ -239,3 +241,41 @@ export async function getWebhookSubscriptions() {
   }
   return readLocalDb().webhook_subscriptions;
 }
+
+// 6. DELIVERY ATTEMPTS
+export async function saveDeliveryAttempt(attempt: { id: string; webhook_id: string; status: string; response_code?: number }) {
+  const payload = {
+    ...attempt,
+    attempted_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("delivery_attempts").upsert(payload);
+    if (!error) return payload;
+    console.warn("Supabase upsert delivery attempt failed, using local DB:", error);
+  }
+
+  const db = readLocalDb();
+  if (!db.delivery_attempts) {
+    db.delivery_attempts = [];
+  }
+  const index = db.delivery_attempts.findIndex((d) => d.id === attempt.id);
+  if (index >= 0) {
+    db.delivery_attempts[index] = { ...db.delivery_attempts[index], ...payload };
+  } else {
+    db.delivery_attempts.push(payload);
+  }
+  writeLocalDb(db);
+  return payload;
+}
+
+export async function getDeliveryAttempts() {
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.from("delivery_attempts").select("*").order("attempted_at", { ascending: false });
+    if (!error && data) return data;
+    console.warn("Supabase fetch delivery attempts failed, using local DB:", error);
+  }
+  const db = readLocalDb();
+  return db.delivery_attempts || [];
+}
+
